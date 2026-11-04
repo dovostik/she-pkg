@@ -170,17 +170,19 @@
     };
   }
   function viewLupa(email) {
-    document.body.innerHTML = loginWrap('<h3>Lupa kata sandi</h3><p class="small muted">Masukkan email akun Anda. Kami kirim tautan untuk membuat kata sandi baru.</p>' +
+    document.body.innerHTML = loginWrap('<h3>Lupa kata sandi</h3><p class="small muted">Masukkan email akun Anda. Permintaan dikirim ke SPV SHE, dan bila email aktif Anda juga menerima tautan untuk membuat kata sandi baru.</p>' +
       '<form id="flupa"><label class="lbl">Email<input type="email" name="email" required autocomplete="email" value="' + esc(email || '') + '"></label>' +
-      '<button class="btn primary block">Kirim tautan reset</button><div class="login-err err"></div></form>' +
+      '<button class="btn primary block">Kirim permintaan</button><div class="login-err err"></div></form>' +
       '<p class="small center"><a href="#" id="kelogin">‹ Kembali ke halaman masuk</a></p>');
     $('#kelogin').onclick = e => { e.preventDefault(); viewLogin(); };
     $('#flupa').onsubmit = async e => {
       e.preventDefault(); const f = e.target, b = $('button', f); busy(b, true, 'Mengirim…');
-      const { error } = await sb.auth.resetPasswordForEmail(f.email.value.trim(), { redirectTo: location.origin + location.pathname + '?reset=1' });
-      if (error) { $('.login-err').textContent = /rate|limit|seconds/i.test(error.message) ? 'Terlalu sering meminta. Tunggu sebentar lalu coba lagi.' : error.message; busy(b, false); return; }
-      document.body.innerHTML = loginWrap('<div class="note ok"><b>Tautan reset dikirim</b> bila email <b>' + esc(f.email.value.trim()) + '</b> terdaftar. Buka email (cek juga folder Spam), lalu klik tautannya untuk membuat kata sandi baru.</div>' +
-        '<p class="small muted">Tidak menerima email dalam beberapa menit? Minta SPV SHE mereset sandi Anda dari menu Akun.</p>' +
+      const em = f.email.value.trim();
+      const r1 = await sb.rpc('minta_reset_sandi', { p_email: em });
+      if (r1.error) { $('.login-err').textContent = r1.error.message; busy(b, false); return; }
+      sb.auth.resetPasswordForEmail(em, { redirectTo: location.origin + location.pathname + '?reset=1' }).catch(() => {});
+      document.body.innerHTML = loginWrap('<div class="note ok"><b>Permintaan terkirim.</b> Bila <b>' + esc(em) + '</b> terdaftar, SPV SHE menerima permintaan reset sandi Anda dan akan memberi <b>sandi sementara</b> lewat WA / telepon.</div>' +
+        '<p class="small muted">Bila email Anda aktif, mungkin juga masuk email berisi tautan untuk membuat sandi baru (cek folder Spam).</p>' +
         '<p class="small center"><a href="#" id="kelogin">‹ Ke halaman masuk</a></p>');
       $('#kelogin').onclick = ev => { ev.preventDefault(); viewLogin(); };
     };
@@ -553,7 +555,10 @@
       [['menunggu', 'Menunggu persetujuan'], ['aktif', 'Aktif'], ['ditolak', 'Ditolak / nonaktif']].map(([k, t]) => '<a href="#/akun?st=' + k + '"' + (k === st ? ' class="on"' : '') + '>' + t + '</a>').join('') + '</div><div id="alist" class="loading">Memuat…</div>';
     let qy = sb.from('profiles').select('id,nama,email,role,jabatan,perusahaan_id,perusahaan_teks,no_hp,nik,status,catatan,created_at,karyawan:karyawan_id(nama,nik)').order('created_at', { ascending: false });
     qy = st === 'ditolak' ? qy.in('status', ['ditolak', 'nonaktif']) : qy.eq('status', st);
-    const data = await q(qy); const L = $('#alist'); if (!L) return; L.className = '';
+    const [data, minta] = await Promise.all([q(qy), q(sb.from('reset_sandi_minta').select('user_id,at').is('selesai_at', null))]);
+    const mintaBy = Object.fromEntries(minta.map(m => [m.user_id, m.at]));
+    if (st === 'aktif') data.sort((x, y) => (mintaBy[y.id] ? 1 : 0) - (mintaBy[x.id] ? 1 : 0));
+    const L = $('#alist'); if (!L) return; L.className = '';
     if (!data.length) { L.innerHTML = '<div class="empty">' + (st === 'menunggu' ? 'Tidak ada pendaftaran yang menunggu.' : 'Tidak ada akun.') + '</div>'; return; }
     const isAdmin = role() === 'admin';
     L.innerHTML = '<div class="mp-list">' + data.map(a => {
@@ -561,7 +566,7 @@
       return '<div class="box akun" data-id="' + a.id + '"><div class="akun-head"><div><b>' + esc(a.nama) + '</b>' + (a.role ? ' <span class="badge">' + esc(ROLE[a.role] || a.role) + (a.role === 'pic_kontraktor' ? ' · ' + esc(state.perusahaan.find(x => x.id === a.perusahaan_id)?.kode || '?') : '') + '</span>' : '') +
         '<br><small class="muted">' + esc(a.email || '') + (a.no_hp ? ' · ' + esc(a.no_hp) : '') + '</small><br><small>' + esc([a.perusahaan_teks, a.jabatan].filter(Boolean).join(' · ') || '-') +
         (a.nik ? ' · NIK ' + esc(a.nik) : '') + (a.karyawan ? ' · terhubung ke ' + esc(a.karyawan.nama) : '') + '</small>' + (a.catatan ? '<br><small class="err">' + esc(a.catatan) + '</small>' : '') + '</div>' +
-        '<small class="muted">Daftar ' + tgl(a.created_at) + '</small></div>' +
+        '<small class="muted">Daftar ' + tgl(a.created_at) + '</small></div>' + (mintaBy[a.id] ? '<div class="note warn">Minta reset sandi (' + tgl(mintaBy[a.id]) + '). Tekan <b>Reset sandi</b>, lalu kirim sandi sementara ke orangnya.</div>' : '') +
         (lock ? (self ? '<p class="small muted">Akun Anda sendiri.</p>' : '<p class="small muted">Akun Admin hanya bisa diubah Admin.</p>') :
         '<form class="akun-form"><div class="grid3"><label class="lbl">Peran di aplikasi<select name="role" required><option value="">— pilih —</option>' +
           PERAN.filter(([k]) => k !== 'admin' || isAdmin).map(([k, t]) => '<option value="' + k + '"' + (k === a.role ? ' selected' : '') + '>' + t + '</option>').join('') + '</select></label>' +
