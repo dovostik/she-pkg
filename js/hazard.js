@@ -328,8 +328,9 @@
     if (!isShe()) { v.innerHTML = '<div class="empty">Khusus tim SHE.</div>'; return; }
     const sb = A().sb, q = A().q;
     const [as, ap] = await Promise.all([q(sb.from('area').select('id,kode,nama,jenis,aktif,urut').order('aktif', { ascending: false }).order('urut', { nullsFirst: false }).order('nama')),
-      q(sb.from('area_pic').select('area_id,user_id,profil:user_id(nama,email,jabatan)'))]);
+      q(sb.from('area_pic').select('area_id,user_id,profil:user_id(nama,email,jabatan)').eq('aktif', true))]);
     v.innerHTML = '<div class="page-head"><div><a href="#/hazard" class="back">‹ Hazard</a><h1>PIC area</h1><div class="muted">Temuan di sebuah area otomatis diteruskan ke PIC-nya. Satu area boleh lebih dari satu PIC (mis. pengganti saat cuti).</div></div></div>' +
+      '<p class="small muted">Penunjukan PIC juga bisa dilakukan SPV saat menyetujui akun (menu Akun). Akun tetap menjadi PIC sampai diubah tim SHE.</p>' +
       '<div class="mp-list">' + as.map(a => { const pics = ap.filter(x => x.area_id === a.id);
         return '<div class="box area-box' + (a.aktif ? '' : ' nonaktif') + '" data-a="' + a.id + '"><div class="akun-head"><div><b>' + esc(a.nama) + '</b> <small class="muted">' + esc(a.kode) + '</small>' + (a.aktif ? '' : ' <span class="badge">nonaktif</span>') + '</div>' +
           '<button class="btn sm ghost" data-tg="' + a.id + '" data-on="' + a.aktif + '">' + (a.aktif ? 'Nonaktifkan' : 'Aktifkan') + '</button></div>' +
@@ -342,11 +343,16 @@
       inp.oninput = () => { clearTimeout(t); t = setTimeout(async () => { const s = inp.value.replace(/[%,()]/g, ' ').trim(); if (s.length < 2) { sug.innerHTML = ''; return; }
         const r = await q(sb.from('profiles').select('id,nama,email,jabatan').eq('aktif', true).or('nama.ilike.%' + s + '%,email.ilike.%' + s + '%').limit(6));
         sug.innerHTML = r.map(p => '<button type="button" data-u="' + p.id + '">' + esc(p.nama) + ' <small>' + esc(p.jabatan || '') + ' · ' + esc(p.email || '') + '</small></button>').join('') || '<div class="small muted">Akun tidak ditemukan — orangnya perlu daftar dulu & disetujui SPV.</div>';
-        $$('[data-u]', sug).forEach(b => b.onclick = async () => { try { await q(sb.from('area_pic').insert({ area_id: aid, user_id: b.dataset.u })); A().toast('PIC ditambahkan'); A().route(); } catch (e) { A().toast(A().errMsg(e), 'err'); } });
+        $$('[data-u]', sug).forEach(b => b.onclick = () => aturArea(b.dataset.u, aid, true, 'PIC ditambahkan'));
       }, 250); };
-      $$('[data-del]', box).forEach(b => b.onclick = async () => { if (!confirm('Lepas PIC ini dari area?')) return; try { await q(sb.from('area_pic').delete().eq('area_id', aid).eq('user_id', b.dataset.del)); A().route(); } catch (e) { A().toast(A().errMsg(e), 'err'); } });
+      $$('[data-del]', box).forEach(b => b.onclick = () => { if (confirm('Lepas PIC ini dari area? (riwayat penunjukan tetap tersimpan)')) aturArea(b.dataset.del, aid, false, 'PIC dilepas'); });
       $('[data-tg]', box).onclick = async e => { try { await q(sb.from('area').update({ aktif: e.target.dataset.on !== 'true' }).eq('id', aid)); A().route(); } catch (er) { A().toast(A().errMsg(er), 'err'); } };
     });
+    async function aturArea(user, aid, tambah, pesan) {
+      try { const cur = (await q(sb.from('area_pic').select('area_id').eq('user_id', user).eq('aktif', true))).map(x => x.area_id);
+        const baru = tambah ? [...new Set([...cur, aid])] : cur.filter(x => x !== aid);
+        await q(sb.rpc('atur_pic_area', { p_user: user, p_area: baru })); A().toast(pesan); A().route(); } catch (e) { A().toast(A().errMsg(e), 'err'); }
+    }
     $('#fareab').onsubmit = async e => { e.preventDefault(); const f = e.target;
       try { await q(sb.from('area').insert({ nama: f.nama.value.trim(), kode: f.kode.value.trim().toUpperCase(), jenis: f.jenis.value, aktif: true, urut: 100 })); A().toast('Area ditambahkan'); A().route(); } catch (er) { A().toast(A().errMsg(er), 'err'); } };
   }

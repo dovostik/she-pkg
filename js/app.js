@@ -612,7 +612,10 @@
       [['menunggu', 'Menunggu persetujuan'], ['aktif', 'Aktif'], ['ditolak', 'Ditolak / nonaktif']].map(([k, t]) => '<a href="#/akun?st=' + k + '"' + (k === st ? ' class="on"' : '') + '>' + t + '</a>').join('') + '</div><div id="alist" class="loading">Memuat…</div>';
     let qy = sb.from('profiles').select('id,nama,email,role,jabatan,perusahaan_id,perusahaan_teks,no_hp,nik,status,catatan,created_at,karyawan:karyawan_id(nama,nik)').order('created_at', { ascending: false });
     qy = st === 'ditolak' ? qy.in('status', ['ditolak', 'nonaktif']) : qy.eq('status', st);
-    const [data, minta] = await Promise.all([q(qy), q(sb.from('reset_sandi_minta').select('user_id,at').is('selesai_at', null))]);
+    const [data, minta, areas, apic] = await Promise.all([q(qy), q(sb.from('reset_sandi_minta').select('user_id,at').is('selesai_at', null)),
+      q(sb.from('area').select('id,nama').eq('aktif', true).order('urut', { nullsFirst: false }).order('nama')), q(sb.from('area_pic').select('area_id,user_id').eq('aktif', true))]);
+    const picBy = {}; apic.forEach(x => (picBy[x.user_id] ||= []).push(x.area_id));
+    const namaArea = Object.fromEntries(areas.map(x => [x.id, x.nama]));
     const mintaBy = Object.fromEntries(minta.map(m => [m.user_id, m.at]));
     if (st === 'aktif') data.sort((x, y) => (mintaBy[y.id] ? 1 : 0) - (mintaBy[x.id] ? 1 : 0));
     const L = $('#alist'); if (!L) return; L.className = '';
@@ -622,7 +625,8 @@
       const self = a.id === state.user.id, lock = self || (a.role === 'admin' && !isAdmin);
       return '<div class="box akun" data-id="' + a.id + '"><div class="akun-head"><div><b>' + esc(a.nama) + '</b>' + (a.role ? ' <span class="badge">' + esc(ROLE[a.role] || a.role) + (a.role === 'pic_kontraktor' ? ' · ' + esc(state.perusahaan.find(x => x.id === a.perusahaan_id)?.kode || '?') : '') + '</span>' : '') +
         '<br><small class="muted">' + esc(a.email || '') + (a.no_hp ? ' · ' + esc(a.no_hp) : '') + '</small><br><small>' + esc([a.perusahaan_teks, a.jabatan].filter(Boolean).join(' · ') || '-') +
-        (a.nik ? ' · NIK ' + esc(a.nik) : '') + (a.karyawan ? ' · terhubung ke ' + esc(a.karyawan.nama) : '') + '</small>' + (a.catatan ? '<br><small class="err">' + esc(a.catatan) + '</small>' : '') + '</div>' +
+        (a.nik ? ' · NIK ' + esc(a.nik) : '') + (a.karyawan ? ' · terhubung ke ' + esc(a.karyawan.nama) : '') + '</small>' +
+        ((picBy[a.id] || []).length ? '<br><small class="pic-tag">PIC area: ' + esc(picBy[a.id].map(i => namaArea[i] || '?').join(', ')) + '</small>' : '') + (a.catatan ? '<br><small class="err">' + esc(a.catatan) + '</small>' : '') + '</div>' +
         '<small class="muted">Daftar ' + tgl(a.created_at) + '</small></div>' + (mintaBy[a.id] ? '<div class="note warn">Minta reset sandi (' + tgl(mintaBy[a.id]) + '). Tekan <b>Reset sandi</b>, lalu kirim sandi sementara ke orangnya.</div>' : '') +
         (lock ? (self ? '<p class="small muted">Akun Anda sendiri.</p>' : '<p class="small muted">Akun Admin hanya bisa diubah Admin.</p>') :
         '<form class="akun-form"><div class="grid3"><label class="lbl">Peran di aplikasi<select name="role" required><option value="">— pilih —</option>' +
@@ -631,7 +635,10 @@
             state.perusahaan.filter(x => x.kode !== 'HM').map(x => '<option value="' + x.id + '" data-kode="' + esc(x.kode || '') + '"' + (x.id === a.perusahaan_id ? ' selected' : '') + '>' + esc(x.nama) + '</option>').join('') + '</select></label>' +
           '<label class="lbl">Jabatan / posisi<input name="jabatan" value="' + esc(a.jabatan || '') + '"></label>' +
           '<label class="lbl">Hubungkan ke data karyawan <small class="muted">(opsional)</small><input name="kcari" placeholder="Ketik NIK / nama" value="' + esc(a.karyawan?.nama || a.nik || '') + '" autocomplete="off"><input type="hidden" name="kid"></label></div>' +
-          '<div class="suggest ksug"></div><div class="actions"><button class="btn primary sm" name="ok">' + (a.status === 'aktif' ? 'Simpan perubahan' : 'Setujui akun') + '</button>' +
+          '<div class="suggest ksug"></div>' +
+          '<fieldset class="pic-area"><legend>PIC area hazard <small class="muted">(opsional — temuan di area ini otomatis ke akun ini)</small></legend><div class="cekbox">' +
+            areas.map(x => '<label><input type="checkbox" name="pa" value="' + x.id + '"' + ((picBy[a.id] || []).includes(x.id) ? ' checked' : '') + '> ' + esc(x.nama) + '</label>').join('') + '</div></fieldset>' +
+          '<div class="actions"><button class="btn primary sm" name="ok">' + (a.status === 'aktif' ? 'Simpan perubahan' : 'Setujui akun') + '</button>' +
           (a.status === 'menunggu' ? '<button type="button" class="btn danger sm" data-tolak>Tolak</button>' : a.status === 'aktif' ? '<button type="button" class="btn sm" data-reset>Reset sandi</button><button type="button" class="btn danger sm" data-nonaktif>Nonaktifkan</button>' : '') + '</div></form>') + '</div>';
     }).join('') + '</div>';
     $$('.akun').forEach(box => {
@@ -655,7 +662,9 @@
       }, 250); };
       f.onsubmit = async e => { e.preventDefault(); const b = f.ok; busy(b, true);
         try { if (f.role.value === 'pic_kontraktor' && !f.per.value) throw new Error('Pilih perusahaan kontraktor untuk PIC');
-          await q(sb.rpc('setujui_akun', { p_id: id, p_role: f.role.value, p_jabatan: f.jabatan.value, p_karyawan: f.kid.value || null, p_perusahaan: f.role.value === 'pic_kontraktor' ? +f.per.value : null })); toast('Akun disimpan'); route(); }
+          await q(sb.rpc('setujui_akun', { p_id: id, p_role: f.role.value, p_jabatan: f.jabatan.value, p_karyawan: f.kid.value || null, p_perusahaan: f.role.value === 'pic_kontraktor' ? +f.per.value : null }));
+          const pa = $$('input[name=pa]:checked', f).map(c => +c.value), lamaPa = (picBy[id] || []).slice().sort().join(',');
+          if (pa.slice().sort().join(',') !== lamaPa) await q(sb.rpc('atur_pic_area', { p_user: id, p_area: pa })); toast('Akun disimpan'); route(); }
         catch (er) { toast(errMsg(er), 'err'); busy(b, false); } };
       const rs = $('[data-reset]', f);
       if (rs) rs.onclick = async () => { const a0 = data.find(x => x.id === id);

@@ -194,3 +194,8 @@ form.inline { display: flex; gap: .4rem; flex-wrap: wrap; margin-top: .6rem; } f
 .bell i:empty { display: none; }
 .nlist { display: flex; flex-direction: column; } .nlist a { display: flex; flex-direction: column; gap: 2px; padding: .6rem .4rem; border-bottom: 1px solid var(--line); text-decoration: none; color: inherit; }
 .nlist a.baru { background: #eef4fb; } .nlist a small { font-size: .8rem; }
+.pic-area { border: 1px solid var(--line); border-radius: 8px; padding: .4rem .7rem .6rem; margin: .4rem 0 .6rem; }
+.pic-area legend { font-size: .85rem; font-weight: 700; padding: 0 .3rem; }
+.cekbox { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: .25rem .8rem; font-size: .88rem; }
+.cekbox label { display: flex; gap: .4rem; align-items: center; }
+.pic-tag { color: #0C4F8F; font-weight: 600; }
