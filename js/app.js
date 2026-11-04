@@ -199,7 +199,7 @@
     qy = qy.order(f.st === 'habis30' ? 'berlaku_sampai' : 'nama').range(f.hal * N, f.hal * N + N - 1);
     const { data, count, error } = await qy; if (error) throw error;
     const urls = await fotoUrls(data.map(r => r.foto_path));
-    const L = $('#mplist'); L.className = '';
+    const L = $('#mplist'); if (!L) return; L.className = '';
     if (!data.length) { L.innerHTML = '<div class="empty">Tidak ada Mine Permit yang cocok.</div>'; return; }
     L.innerHTML = '<div class="muted small">' + count + ' Mine Permit' + (isShe() ? ' · centang untuk dicetak' : '') + '</div><div class="mp-list">' + data.map(r =>
       '<div class="mp-row">' + (isShe() ? '<input type="checkbox" class="pick" data-id="' + r.id + '"' + (state.pilih.has(r.id) ? ' checked' : '') + ' aria-label="Pilih untuk dicetak">' : '') +
@@ -320,7 +320,7 @@
     let qy = sb.from('kimper_pengajuan').select('id,nomor,jenis,status,akses_kartu,created_at,updated_at,karyawan:karyawan_id(nama,nik,perusahaan:perusahaan_id(nama))').order('updated_at', { ascending: false }).limit(100);
     if (st === 'proses') qy = qy.in('status', ['draft', 'diajukan', 'verifikasi_dok', 'uji']);
     else if (st !== 'semua') qy = qy.eq('status', st);
-    const data = await q(qy); const L = $('#plist'); L.className = '';
+    const data = await q(qy); const L = $('#plist'); if (!L) return; L.className = '';
     L.innerHTML = data.length ? '<div class="mp-list">' + data.map(p => '<a class="mp-row mp-link" href="#/pengajuan/' + p.id + '"><span class="mp-main"><b>' + esc(p.karyawan?.nama) + '</b><small>' + esc(p.nomor) + ' · ' + JENIS_P[p.jenis] + ' · ' + esc(p.karyawan?.perusahaan?.nama) + '</small></span>' +
       '<span class="mp-side"><span class="badge pst-' + p.status + '">' + PST[p.status] + '</span>' + (p.akses_kartu === 'RESTRICTED' ? '<span class="badge restr">RESTRICTED</span>' : '') + '<small>' + tgl(p.updated_at) + '</small></span></a>').join('') + '</div>'
       : '<div class="empty">Tidak ada pengajuan.</div>';
@@ -579,7 +579,7 @@
     if (f.per) qy = qy.eq('perusahaan_id', f.per);
     if (f.dari) qy = qy.gte('tgl', f.dari);
     if (f.q) qy = qy.ilike('karyawan.nama', '%' + f.q.replace(/[%,()]/g, ' ') + '%');
-    const data = await q(qy); const L = $('#pl'); L.className = '';
+    const data = await q(qy); const L = $('#pl'); if (!L) return; L.className = '';
     L.innerHTML = data.length ? '<div class="mp-list">' + data.map(p => '<a class="mp-row mp-link" href="' + (p.kimper_id ? '#/mp/' + p.kimper_id : '#/pelanggaran') + '"><span class="mp-main"><b>' + esc(p.karyawan?.nama) + '</b><small>' + esc(p.pelanggaran_jenis?.nama) + '</small><small class="muted">' + esc(p.nomor) + ' · ' + esc(p.kimper?.nomor || '') + ' · ' + esc(p.perusahaan?.nama || '') + '</small></span>' +
       '<span class="mp-side"><small>' + tgl(p.tgl) + ' ' + jam(p.tgl) + '</small>' + (p.lokasi ? '<small>' + esc(p.lokasi) + '</small>' : '') + (p.unit_no ? '<small>' + esc(p.unit_no) + '</small>' : '') + '</span></a>').join('') + '</div>'
       : '<div class="empty">Belum ada pelanggaran tercatat.</div>';
