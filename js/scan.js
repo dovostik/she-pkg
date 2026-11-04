@@ -2,7 +2,7 @@
 (function () {
   const A = () => window.App;
   const $ = (s, el) => (el || document).querySelector(s);
-  const KEY_Q = 'plg_antrian', KEY_J = 'plg_jenis', KEY_AREA = 'plg_area', KEY_CACHE = 'mp_cache';
+  const KEY_Q = 'plg_antrian', KEY_J = 'plg_jenis', KEY_AREA = 'plg_area', KEY_CACHE = 'mp_cache', KEY_OFF = 'mp_offline';
   let stream = null, loopId = null, jsqrLoaded = null;
 
   const ls = { get: (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch (e) { return d; } }, set: (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { } } };
@@ -22,6 +22,39 @@
       ls.set(KEY_AREA, a);
     } catch (e) { /* offline: pakai cache */ }
   }
+
+  /* salinan data Mine Permit di HP agar scan tetap jalan tanpa sinyal */
+  let syncJalan = null;
+  async function syncOffline(paksa) {
+    if (!navigator.onLine || !A()?.state?.user || !A().canScan()) return;
+    const ada = ls.get(KEY_OFF, null);
+    if (!paksa && ada && Date.now() - ada.at < 30 * 60e3) return;
+    if (syncJalan) return syncJalan;
+    syncJalan = (async () => {
+      try {
+        const rows = [];
+        for (let i = 0; ; i += 1000) {
+          const r = await A().q(A().sb.from('v_mine_permit').select('id,nomor,nama,perusahaan,jabatan,karyawan_id,status,berlaku_sampai,akses_kartu,token_qr,unit,jml_pelanggaran')
+            .in('status', ['aktif', 'ditangguhkan', 'dicabut', 'kadaluarsa']).order('id').range(i, i + 999));
+          rows.push(...r.map(x => [x.token_qr.slice(0, 12), x.id, x.nomor, x.nama, x.perusahaan, x.jabatan, x.karyawan_id, x.status, x.berlaku_sampai, x.akses_kartu,
+            (x.unit || []).map(u => u.nama + ' (' + u.akses + ')'), x.jml_pelanggaran]));
+          if (r.length < 1000) break;
+        }
+        ls.set(KEY_OFF, { at: Date.now(), rows });
+        infoOffline();
+      } catch (e) { console.warn('sync offline gagal', e); } finally { syncJalan = null; }
+    })();
+    return syncJalan;
+  }
+  const dariBaris = x => ({ kimper_id: x[1], nomor: x[2], nama: x[3], perusahaan: x[4], jabatan: x[5], karyawan_id: x[6], berlaku_sampai: x[8], akses_kartu: x[9], unit: x[10], jumlah_pelanggaran: x[11],
+    status: x[7] === 'aktif' && x[8] < new Date(Date.now() + 7 * 3600e3).toISOString().slice(0, 10) ? 'kadaluarsa' : x[7], offline: true });
+  function cariOffline(id12) { const d = ls.get(KEY_OFF, null); const x = d && id12 && d.rows.find(r => r[0] === id12.slice(0, 12)); return x ? dariBaris(x) : null; }
+  function cariOfflineTeks(t) { const d = ls.get(KEY_OFF, null); if (!d) return []; const n = t.toLowerCase();
+    return d.rows.filter(r => (r[2] || '').toLowerCase().includes(n) || (r[3] || '').toLowerCase().includes(n)).slice(0, 8).map(r => ({ token_qr: r[0], nomor: r[2], nama: r[3], perusahaan: r[4], status: r[7] })); }
+  function infoOffline() { const el = $('#offinfo'); if (!el) return; const d = ls.get(KEY_OFF, null);
+    el.innerHTML = d ? 'Data offline: ' + d.rows.length + ' Mine Permit, diperbarui ' + new Date(d.at).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }) + (navigator.onLine ? ' · <a href="#" id="syncnow">perbarui</a>' : '')
+      : (navigator.onLine ? 'Menyiapkan data offline…' : 'Belum ada data offline — buka halaman ini sekali saat ada sinyal.');
+    const a = $('#syncnow'); if (a) a.onclick = e => { e.preventDefault(); el.textContent = 'Memperbarui…'; syncOffline(true); }; }
 
   /* pencarian jenis: cocok kata / awalan / salah ketik ringan */
   const norm = s => s.toLowerCase().normalize('NFD').replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
@@ -66,14 +99,17 @@
   async function view(v) {
     if (!A().canScan()) { v.innerHTML = '<div class="empty">Scan hanya untuk SHE / pengawas.</div>'; return; }
     refreshRef();
-    v.innerHTML = '<div class="page-head"><h1>Scan Mine Permit</h1></div><div id="antrian"></div>' +
+    v.innerHTML = '<div class="page-head"><h1>Scan Mine Permit</h1></div><div id="antrian"></div><p class="small muted" id="offinfo"></p>' +
       '<div class="scan-wrap"><video playsinline muted></video><div class="scan-frame"></div><div class="scan-msg">Arahkan kamera ke QR di belakang Mine Permit</div></div>' +
       '<div class="actions"><button class="btn" id="mulai">Nyalakan kamera</button></div>' +
       '<form class="filters" id="manual"><input name="cari" placeholder="QR rusak? Ketik nomor Mine Permit / nama"><button class="btn">Cari</button></form><div id="hasil"></div>';
-    badge(); kirimAntrian();
+    badge(); kirimAntrian(); infoOffline(); syncOffline();
     $('#mulai').onclick = mulai;
     $('#manual').onsubmit = async e => {
       e.preventDefault(); const s = e.target.cari.value.replace(/[%,()]/g, ' ').trim(); if (!s) return;
+      if (!navigator.onLine) { const r = cariOfflineTeks(s);
+        $('#hasil').innerHTML = r.length ? '<div class="suggest">' + r.map(x => '<button type="button" data-t="' + x.token_qr + '">' + A().esc(x.nama) + ' <small>' + A().esc(x.nomor) + ' · ' + A().esc(x.perusahaan) + ' · ' + x.status + '</small></button>').join('') + '</div>' : '<div class="empty">Tidak ditemukan di data offline.</div>';
+        document.querySelectorAll('#hasil [data-t]').forEach(b => b.onclick = () => tampil(b.dataset.t, 'manual')); return; }
       try { const r = await A().q(A().sb.from('v_mine_permit').select('id,nomor,nama,perusahaan,status,token_qr').or('nomor.ilike.%' + s + '%,nama.ilike.%' + s + '%').order('berlaku_sampai', { ascending: false }).limit(8));
         $('#hasil').innerHTML = r.length ? '<div class="suggest">' + r.map(x => '<button type="button" data-t="' + x.token_qr + '">' + A().esc(x.nama) + ' <small>' + A().esc(x.nomor) + ' · ' + A().esc(x.perusahaan) + ' · ' + x.status + '</small></button>').join('') + '</div>' : '<div class="empty">Tidak ditemukan.</div>';
         document.querySelectorAll('#hasil [data-t]').forEach(b => b.onclick = () => tampil(b.dataset.t, 'manual'));
@@ -109,19 +145,22 @@
   async function tampil(isi, sumber) {
     const p = parseQR(isi.includes('ID:') || isi.length >= 12 ? isi : ''); const H = $('#hasil'); const esc = A().esc;
     let r = null;
-    if (navigator.onLine) { try { r = (await A().q(A().sb.rpc('scan_mine_permit', { p_isi: isi })))[0]; } catch (e) { A().toast(A().errMsg(e), 'err'); } }
+    let gagalJaringan = !navigator.onLine;
+    if (navigator.onLine) { try { r = (await A().q(A().sb.rpc('scan_mine_permit', { p_isi: isi })))[0]; } catch (e) { gagalJaringan = true; if (!/fetch|network|load failed/i.test(A().errMsg(e))) A().toast(A().errMsg(e), 'err'); } }
+    if (!r && gagalJaringan) r = cariOffline(p.id);
     if (r) { const c = ls.get(KEY_CACHE, {}); c[p.id || r.kimper_id] = { nama: r.nama, nomor: r.nomor }; ls.set(KEY_CACHE, c); }
     const boleh = r ? (r.status === 'aktif') : null;
     const foto = r?.foto_path ? await A().fotoUrl(r.foto_path).catch(() => null) : null;
     H.innerHTML = '<div class="scan-res ' + (r ? (boleh ? 'ok' : 'no') : 'off') + '">' +
       '<div class="sr-head"><span class="thumb lg">' + (foto ? '<img src="' + esc(foto) + '" alt="">' : '') + '</span><div><b class="big">' + esc(r?.nama || p.nama || '—') + '</b><div>' + esc(r?.nomor || p.nomor || '') + '</div><div class="muted">' + esc(r?.perusahaan || '') + (r?.jabatan ? ' · ' + esc(r.jabatan) : '') + '</div>' +
-        (r ? '<div class="verdict">' + (boleh ? 'BOLEH mengoperasikan unit' : 'TIDAK BOLEH — Mine Permit ' + esc(r.status)) + '</div><div class="small">Berlaku s/d ' + A().tgl(r.berlaku_sampai) + ' · ' + (r.akses_kartu === 'RESTRICTED' ? 'RESTRICTED' : 'FULL ACCESS') + '</div>'
+        (r ? '<div class="verdict">' + (boleh ? 'BOLEH mengoperasikan unit' : 'TIDAK BOLEH — Mine Permit ' + esc(r.status)) + '</div><div class="small">Berlaku s/d ' + A().tgl(r.berlaku_sampai) + ' · ' + (r.akses_kartu === 'RESTRICTED' ? 'RESTRICTED' : 'FULL ACCESS') + '</div>' +
+              (r.offline ? '<div class="small"><b>Tanpa sinyal</b> — dicek dari data offline di HP (' + new Date(ls.get(KEY_OFF, {}).at || 0).toLocaleString('id-ID', { dateStyle: 'short', timeStyle: 'short' }) + ')</div>' : '')
            : '<div class="verdict">Tanpa sinyal — data dari QR (berlaku s/d ' + esc(p.berlaku || '-') + ')</div>') + '</div></div>' +
       (r ? '<div class="small"><b>Unit:</b> ' + esc((r.unit || []).join(', ') || '-') + '</div>' +
-        '<div class="small"><b>Pelanggaran:</b> ' + r.jumlah_pelanggaran + (r.pelanggaran_terakhir?.length ? '<ul class="plain">' + r.pelanggaran_terakhir.map(x => '<li>' + A().tgl(x.tgl) + ' — ' + esc(x.jenis) + (x.lokasi ? ' (' + esc(x.lokasi) + ')' : '') + '</li>').join('') + '</ul>' : '') + '</div>' +
-        (r.accident?.length ? '<div class="small"><b>Accident:</b> ' + r.accident.map(a => '<span class="dot ' + a.warna + '"></span>' + a.tingkat).join(' ') + '</div>' : '') : '') +
+        '<div class="small"><b>Pelanggaran:</b> ' + (r.jumlah_pelanggaran ?? '-') + (r.pelanggaran_terakhir?.length ? '<ul class="plain">' + r.pelanggaran_terakhir.map(x => '<li>' + A().tgl(x.tgl) + ' — ' + esc(x.jenis) + (x.lokasi ? ' (' + esc(x.lokasi) + ')' : '') + '</li>').join('') + '</ul>' : '') + '</div>' +
+        (r.accident?.length && !r.offline ? '<div class="small"><b>Accident:</b> ' + r.accident.map(a => '<span class="dot ' + a.warna + '"></span>' + a.tingkat).join(' ') + '</div>' : '') : '') +
       '</div>' + formHTML() +
-      '<div class="actions"><button class="btn ghost" id="lagi">Scan berikutnya</button>' + (r ? '<a class="btn ghost" href="#/mp/' + r.kimper_id + '">Buka Mine Permit</a>' : '') + '</div>';
+      '<div class="actions"><button class="btn ghost" id="lagi">Scan berikutnya</button>' + (r && !r.offline ? '<a class="btn ghost" href="#/mp/' + r.kimper_id + '">Buka Mine Permit</a>' : '') + '</div>';
     $('#lagi').onclick = () => { H.innerHTML = ''; mulai(); };
     pasangForm(r, p, sumber);
   }
@@ -168,5 +207,5 @@
     c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height); return c.toDataURL('image/jpeg', 0.8);
   }
 
-  window.Scan = { view, stop, parseQR, cariJenis, kirimAntrian };
+  window.Scan = { view, stop, parseQR, cariJenis, kirimAntrian, syncOffline };
 })();

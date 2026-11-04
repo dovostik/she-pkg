@@ -56,7 +56,15 @@
   const clearFotoCache = p => { fotoCache.delete('foto:' + p); };
 
   /* ---------- data referensi ---------- */
+  const simpanLokal = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { } };
+  const bacaLokal = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch (e) { return d; } };
   async function loadRef() {
+    const c = bacaLokal('she_ref', null);
+    if (!navigator.onLine && c) { Object.assign(state, { perusahaan: c.perusahaan, jenisUnit: c.jenisUnit, syarat: c.syarat }); Object.assign(state.setting, c.setting || {}); return; }
+    try { await loadRefOnline(); simpanLokal('she_ref', { perusahaan: state.perusahaan, jenisUnit: state.jenisUnit, syarat: state.syarat, setting: state.setting }); }
+    catch (e) { if (!c) throw e; Object.assign(state, { perusahaan: c.perusahaan, jenisUnit: c.jenisUnit, syarat: c.syarat }); Object.assign(state.setting, c.setting || {}); }
+  }
+  async function loadRefOnline() {
     const [per, ju, sy, st] = await Promise.all([
       q(sb.from('perusahaan').select('id,nama,kode,jenis').eq('aktif', true).order('nama')),
       q(sb.from('kimper_jenis_unit').select('kode,nama,kelas,sim_min,urut').eq('aktif', true).order('urut')),
@@ -72,6 +80,14 @@
     '<rect x="20" y="28" width="57" height="257" rx="28.5" fill="#0A8442"/><circle cx="113" cy="152" r="23" fill="#0A8442"/><rect x="148" y="28" width="57" height="257" rx="28.5" fill="#0A8442"/>' +
     '<rect x="215" y="28" width="57" height="257" rx="28.5" fill="#0C4F8F"/><rect x="280" y="70" width="53" height="170" rx="26.5" fill="#0C4F8F"/><rect x="340" y="28" width="57" height="257" rx="28.5" fill="#0C4F8F"/></svg></svg>';
 
+  function tandaSinyal() {
+    let b = $('#offbar');
+    if (navigator.onLine) { if (b) b.remove(); return; }
+    if (!b) { b = document.createElement('div'); b.id = 'offbar'; b.className = 'offbar'; document.body.prepend(b); }
+    b.textContent = 'Tanpa sinyal — mode offline. Scan & catat pelanggaran tetap jalan, data terkirim otomatis saat ada sinyal.';
+  }
+  addEventListener('online', () => { tandaSinyal(); if (window.Scan?.syncOffline) Scan.syncOffline(); });
+  addEventListener('offline', tandaSinyal);
   function shell() {
     const nav = [['mp', 'Mine Permit'], ['pengajuan', 'Pengajuan']];
     if (canScan()) nav.push(['scan', 'Scan']);
@@ -109,14 +125,17 @@
     const v = $('#view'); v.innerHTML = '<div class="loading">Memuat…</div>'; window.scrollTo(0, 0);
     if (window.Scan) Scan.stop();
     try {
-      if (!parts[0] || parts[0] === 'mp') return parts[1] ? viewMPDetail(v, parts[1]) : viewMP(v, params);
-      if (parts[0] === 'pengajuan') return parts[1] === 'baru' ? viewPengajuanBaru(v, params) : parts[1] ? viewPengajuan(v, parts[1]) : viewPengajuanList(v, params);
-      if (parts[0] === 'cetak') return viewCetak(v, params);
-      if (parts[0] === 'scan') return Scan.view(v);
-      if (parts[0] === 'pelanggaran') return viewPelanggaran(v, params);
-      if (parts[0] === 'akun' && canApprove()) return viewAkun(v, params);
+      if (!parts[0] || parts[0] === 'mp') return await (parts[1] ? viewMPDetail(v, parts[1]) : viewMP(v, params));
+      if (parts[0] === 'pengajuan') return await (parts[1] === 'baru' ? viewPengajuanBaru(v, params) : parts[1] ? viewPengajuan(v, parts[1]) : viewPengajuanList(v, params));
+      if (parts[0] === 'cetak') return await viewCetak(v, params);
+      if (parts[0] === 'scan') return await Scan.view(v);
+      if (parts[0] === 'pelanggaran') return await viewPelanggaran(v, params);
+      if (parts[0] === 'akun' && canApprove()) return await viewAkun(v, params);
       v.innerHTML = '<p>Halaman tidak ditemukan.</p>';
-    } catch (e) { console.error(e); v.innerHTML = '<div class="empty err">Gagal memuat: ' + esc(errMsg(e)) + '</div>'; }
+    } catch (e) { console.error(e);
+      v.innerHTML = !navigator.onLine || /fetch|network|load failed/i.test(errMsg(e))
+        ? '<div class="empty"><b>Tanpa sinyal.</b><br>Halaman ini butuh internet.' + (canScan() ? ' <b>Scan Mine Permit</b> & catat pelanggaran tetap bisa dipakai offline.<br><br><a class="btn primary" href="#/scan">Buka Scan</a>' : '') + '</div>'
+        : '<div class="empty err">Gagal memuat: ' + esc(errMsg(e)) + '</div>'; }
   }
 
   /* ---------- login, daftar akun, menunggu persetujuan ---------- */
@@ -640,12 +659,14 @@
   async function setUser(session) {
     state.user = session?.user || null;
     if (state.user) {
-      const { data } = await sb.from('profiles').select('id,nama,role,aktif,status,catatan,jabatan,karyawan_id,perusahaan_id').eq('id', state.user.id).maybeSingle();
-      state.profile = data;
+      const { data, error } = await sb.from('profiles').select('id,nama,role,aktif,status,catatan,jabatan,karyawan_id,perusahaan_id').eq('id', state.user.id).maybeSingle();
+      const simpan = bacaLokal('she_profil', null);
+      if (error && simpan && simpan.id === state.user.id) state.profile = simpan; // tanpa sinyal: pakai profil terakhir
+      else { state.profile = data; if (data) simpanLokal('she_profil', data); }
       try { await loadRef(); } catch (e) { console.error(e); }
     } else state.profile = null;
   }
-  window.App = { sb, esc, toast, fotoUrl, fotoUrls, clearFotoCache, state, q, errMsg, tgl, jam, isShe, canScan, modal, busy, statusBadge, route };
+  window.App = { sb, esc, toast, canAjukan, isPic, fotoUrl, fotoUrls, clearFotoCache, state, q, errMsg, tgl, jam, isShe, canScan, modal, busy, statusBadge, route };
   (async () => {
     state.recovery = new URLSearchParams(location.search).has('reset');
     const { data } = await sb.auth.getSession(); await setUser(data.session);
@@ -653,9 +674,10 @@
       if (ev === 'PASSWORD_RECOVERY') { state.recovery = true; await setUser(session); return viewSandiBaru(); }
       if (state.recovery) return;
       if (ev === 'SIGNED_IN' && !state.user) { await setUser(session); document.body.innerHTML = ''; route(); }
-      if (ev === 'SIGNED_OUT') { state.user = null; route(); }
+      if (ev === 'SIGNED_OUT') { state.user = null; ['she_profil', 'mp_offline'].forEach(k => { try { localStorage.removeItem(k); } catch (e) { } }); route(); }
     });
     window.addEventListener('hashchange', route);
-    route();
+    await route(); tandaSinyal();
+    if (state.user && window.Scan?.syncOffline) Scan.syncOffline();
   })();
 })();
