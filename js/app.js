@@ -245,19 +245,16 @@
       '<div class="printbar no-print" id="pbar"></div><div id="mplist" class="loading">Memuat…</div>';
     $('#fmp').onsubmit = e => { e.preventDefault(); const d = new FormData(e.target); location.hash = '#/mp?' + new URLSearchParams({ q: d.get('q'), per: d.get('per'), st: d.get('st') }); };
     renderPilih();
-    let qy = sb.from('v_mine_permit').select('id,nomor,status,berlaku_sampai,akses_kartu,nama,nik,jabatan,perusahaan,foto_path,unit,dicetak_at,jml_pelanggaran', { count: 'exact' });
-    if (f.q) { const s = f.q.replace(/[%,()]/g, ' ').trim(); qy = qy.or('nama.ilike.%' + s + '%,nomor.ilike.%' + s + '%,nik.ilike.%' + s + '%'); }
-    if (f.per) qy = qy.eq('perusahaan_id', f.per);
-    if (f.st === 'aktif') qy = qy.eq('status', 'aktif');
-    if (f.st === 'kadaluarsa') qy = qy.eq('status', 'kadaluarsa');
-    if (f.st === 'belumcetak') qy = qy.eq('status', 'aktif').is('dicetak_at', null);
-    if (f.st === 'habis30') { const d = new Date(); d.setDate(d.getDate() + 30); qy = qy.eq('status', 'aktif').lte('berlaku_sampai', d.toISOString().slice(0, 10)); }
-    qy = qy.order(f.st === 'habis30' ? 'berlaku_sampai' : 'nama').range(f.hal * N, f.hal * N + N - 1);
+    let qy = filterMP(sb.from('v_mine_permit').select('id,nomor,status,berlaku_sampai,akses_kartu,nama,nik,jabatan,perusahaan,foto_path,unit,dicetak_at,jml_pelanggaran', { count: 'exact' }), f)
+      .range(f.hal * N, f.hal * N + N - 1);
     const { data, count, error } = await qy; if (error) throw error;
     const urls = await fotoUrls(data.map(r => r.foto_path));
     const L = $('#mplist'); if (!L) return; L.className = '';
     if (!data.length) { L.innerHTML = '<div class="empty">Tidak ada Mine Permit yang cocok.</div>'; return; }
-    L.innerHTML = '<div class="muted small">' + count + ' Mine Permit' + (isShe() ? ' · centang untuk dicetak' : '') + '</div><div class="mp-list">' + data.map(r =>
+    L.innerHTML = '<div class="list-head"><span class="muted small">' + count + ' Mine Permit' + (isShe() ? ' · centang untuk dicetak' : '') + '</span>' +
+      (isShe() ? '<span class="pick-all"><button type="button" class="btn sm ghost" id="pilihhal">Pilih semua di halaman ini (' + data.length + ')</button>' +
+        (count > data.length ? '<button type="button" class="btn sm ghost" id="pilihsemua">Pilih semua hasil (' + count + ' → ' + Math.ceil(count / 4) + ' lembar)</button>' : '') + '</span>' : '') +
+      '</div><div class="mp-list">' + data.map(r =>
       '<div class="mp-row">' + (isShe() ? '<input type="checkbox" class="pick" data-id="' + r.id + '"' + (state.pilih.has(r.id) ? ' checked' : '') + ' aria-label="Pilih untuk dicetak">' : '') +
       '<a href="#/mp/' + r.id + '" class="mp-link"><span class="thumb">' + (urls[r.foto_path] ? '<img loading="lazy" src="' + esc(urls[r.foto_path]) + '" alt="">' : '') + '</span>' +
       '<span class="mp-main"><b>' + esc(r.nama) + '</b><small>' + esc(r.nomor) + ' · ' + esc(r.perusahaan) + '</small>' +
@@ -267,6 +264,24 @@
       (r.status === 'aktif' && !r.dicetak_at ? '<small class="muted">belum dicetak</small>' : '') + '</span></a></div>').join('') + '</div>' +
       pager(f, count, N, 'mp');
     $$('.pick', L).forEach(c => c.onchange = () => { c.checked ? state.pilih.add(c.dataset.id) : state.pilih.delete(c.dataset.id); simpanPilih(); renderPilih(); });
+    if ($('#pilihhal')) $('#pilihhal').onclick = () => { data.forEach(r => state.pilih.add(r.id)); $$('.pick', L).forEach(c => c.checked = true); simpanPilih(); renderPilih(); };
+    if ($('#pilihsemua')) $('#pilihsemua').onclick = async e => {
+      if (count > 400 && !confirm('Pilih ' + count + ' Mine Permit (' + Math.ceil(count / 4) + ' lembar A4)?')) return;
+      busy(e.target, true);
+      try { for (let i = 0; i < count; i += 1000) (await q(filterMP(sb.from('v_mine_permit').select('id'), f).range(i, i + 999))).forEach(r => state.pilih.add(r.id));
+        $$('.pick', L).forEach(c => c.checked = true); simpanPilih(); renderPilih(); toast(state.pilih.size + ' Mine Permit dipilih'); }
+      catch (er) { toast(errMsg(er), 'err'); } busy(e.target, false);
+    };
+  }
+  // filter daftar Mine Permit (dipakai daftar & "pilih semua hasil"); urutan sama dengan daftar
+  function filterMP(qy, f) {
+    if (f.q) { const s = f.q.replace(/[%,()]/g, ' ').trim(); qy = qy.or('nama.ilike.%' + s + '%,nomor.ilike.%' + s + '%,nik.ilike.%' + s + '%'); }
+    if (f.per) qy = qy.eq('perusahaan_id', f.per);
+    if (f.st === 'aktif') qy = qy.eq('status', 'aktif');
+    if (f.st === 'kadaluarsa') qy = qy.eq('status', 'kadaluarsa');
+    if (f.st === 'belumcetak') qy = qy.eq('status', 'aktif').is('dicetak_at', null);
+    if (f.st === 'habis30') { const d = new Date(); d.setDate(d.getDate() + 30); qy = qy.eq('status', 'aktif').lte('berlaku_sampai', d.toISOString().slice(0, 10)); }
+    return qy.order(f.st === 'habis30' ? 'berlaku_sampai' : 'nama').order('id');
   }
   function pager(f, count, N, base) {
     const pages = Math.ceil(count / N); if (pages <= 1) return '';
@@ -358,7 +373,9 @@
       '<div class="actions"><button class="btn primary" id="print">Cetak / simpan PDF</button></div></div>' +
       '<div class="note no-print">Di jendela cetak pilih <b>kertas A4, orientasi landscape, skala 100% (jangan "Fit to page"), margin: None</b>, dan centang <b>Background graphics</b>. Tiap kartu 11,25 × 9,5 cm, lipat di garis putus-putus.</div>' +
       (noFoto.length ? '<div class="note warn no-print">' + noFoto.length + ' kartu belum punya foto: ' + esc(noFoto.map(r => r.nama).join(', ')) + '</div>' : '') +
-      '<div class="print-area">' + sheets.map(s => '<div class="mp-sheet">' + s.map(c => MPCard.renderCard(c, { foto: urls[c.foto_path], ktt: state.setting.ktt_nama, persetujuan: state.setting.mp_judul_persetujuan })).join('') + '</div>').join('') + '</div>';
+      '<div class="print-area">' + sheets.map((s, i) => '<div class="sheet-lbl no-print">Lembar ' + (i + 1) + ' dari ' + sheets.length + '</div><div class="mp-sheet">' + s.map(c => '<div class="cell">' + MPCard.renderCard(c, { foto: urls[c.foto_path], ktt: state.setting.ktt_nama, persetujuan: state.setting.mp_judul_persetujuan }) +
+        (params.get('ids') ? '' : '<button class="btn sm danger buang no-print" data-buang="' + c.id + '" title="Keluarkan dari cetakan">×</button>') + '</div>').join('') + '</div>').join('') + '</div>';
+    $$('[data-buang]').forEach(b => b.onclick = () => { state.pilih.delete(b.dataset.buang); simpanPilih(); route(); });
     $('#print').onclick = async () => {
       await Promise.all($$('.print-area img').map(i => i.complete ? 0 : new Promise(r => { i.onload = i.onerror = r; })));
       window.print();

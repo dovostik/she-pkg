@@ -161,3 +161,8 @@ form.inline { display: flex; gap: .4rem; flex-wrap: wrap; margin-top: .6rem; } f
 .login-box .btn.block + .btn.block { margin-top: .5rem; }
 .pw-box { font: 700 1.4rem/1.3 ui-monospace, Menlo, Consolas, monospace; letter-spacing: .05em; background: #f1f5f9; border: 1px dashed #94a3b8; border-radius: 8px; padding: .7rem; text-align: center; user-select: all; }
 .offbar { position: sticky; top: 0; z-index: 60; background: #6b4e00; color: #fff; font-size: .82rem; padding: .4rem .75rem; text-align: center; }
+.list-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .4rem; margin-bottom: .4rem; }
+.pick-all { display: flex; flex-wrap: wrap; gap: .3rem; }
+.sheet-lbl { font-size: .8rem; color: var(--muted); margin: 1rem 0 .3rem; }
+.mp-sheet .cell { position: relative; }
+.mp-sheet .cell .buang { position: absolute; top: 1mm; right: 1mm; padding: .1rem .45rem; line-height: 1.2; }
