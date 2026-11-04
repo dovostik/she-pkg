@@ -23,7 +23,7 @@ h1 { font-size: 1.35rem; margin: 0; } h3 { font-size: 1rem; margin: 0 0 .6rem; }
 .me { display: flex; align-items: center; gap: .6rem; font-size: .85rem; }
 .me span { display: flex; flex-direction: column; line-height: 1.15; text-align: right; } .me small { opacity: .8; }
 main { max-width: 1180px; margin: 0 auto; padding: 1rem; }
-@media (max-width: 720px) { .me span { display: none; } .top { gap: .5rem; padding: .5rem .75rem; } .brand { flex: 1; } .top nav { order: 3; flex: 1 1 100%; } }
+@media (max-width: 720px) { .me span { display: none; } .top { gap: .5rem; padding: .5rem .75rem; } .brand { flex: 1; } .top nav { order: 3; flex: 1 1 100%; } .top nav a { padding: .45rem .55rem; } }
 
 /* tombol & form */
 .btn { display: inline-flex; align-items: center; justify-content: center; gap: .35rem; padding: .55rem 1rem; border-radius: 8px; border: 1px solid var(--line); background: #fff; color: var(--ink);
@@ -154,3 +154,8 @@ form.inline { display: flex; gap: .4rem; flex-wrap: wrap; margin-top: .6rem; } f
   .print-area .mp-sheet { box-shadow: none; page-break-after: always; break-after: page; }
   .print-area .mp-sheet:last-child { page-break-after: auto; break-after: auto; }
 }
+.center { text-align: center; }
+.login-box h3 { margin: .4rem 0; }
+.akun-head { display: flex; justify-content: space-between; gap: .8rem; margin-bottom: .6rem; }
+.akun .grid3 { margin-top: .2rem; }
+.login-box .btn.block + .btn.block { margin-top: .5rem; }

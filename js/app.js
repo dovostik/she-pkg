@@ -73,6 +73,7 @@
     const nav = [['mp', 'Mine Permit'], ['pengajuan', 'Pengajuan']];
     if (canScan()) nav.push(['scan', 'Scan']);
     nav.push(['pelanggaran', 'Pelanggaran']);
+    if (canApprove()) nav.push(['akun', 'Akun']);
     document.body.innerHTML =
       '<header class="top no-print"><a class="brand" href="#/mp">' + LOGO + '<span><b>SHE PKG</b><small>PT Hamparan Mulya</small></span></a>' +
       '<nav>' + nav.map(([h, t]) => '<a href="#/' + h + '" data-nav="' + h + '">' + t + '</a>').join('') + '</nav>' +
@@ -96,6 +97,7 @@
 
   async function route() {
     if (!state.user) return viewLogin();
+    if (!state.profile || !state.profile.aktif || !state.profile.role) return viewMenunggu();
     if (!$('#view')) shell();
     const h = location.hash.replace(/^#\/?/, ''); const [path, qs] = h.split('?'); const parts = path.split('/'); const params = new URLSearchParams(qs || '');
     $$('[data-nav]').forEach(a => a.classList.toggle('on', a.dataset.nav === parts[0] || (!parts[0] && a.dataset.nav === 'mp')));
@@ -107,22 +109,68 @@
       if (parts[0] === 'cetak') return viewCetak(v, params);
       if (parts[0] === 'scan') return Scan.view(v);
       if (parts[0] === 'pelanggaran') return viewPelanggaran(v, params);
+      if (parts[0] === 'akun' && canApprove()) return viewAkun(v, params);
       v.innerHTML = '<p>Halaman tidak ditemukan.</p>';
     } catch (e) { console.error(e); v.innerHTML = '<div class="empty err">Gagal memuat: ' + esc(errMsg(e)) + '</div>'; }
   }
 
-  /* ---------- login ---------- */
+  /* ---------- login, daftar akun, menunggu persetujuan ---------- */
+  const loginWrap = inner => '<div class="login"><div class="login-box">' + LOGO.replace('class="logo"', 'class="logo big"') +
+    '<h1>SHE PKG</h1><p class="muted">Sistem Mine Permit, SHE &amp; gudang — PT Hamparan Mulya, Site Muara Teweh</p>' + inner + '</div></div>';
   function viewLogin() {
-    document.body.innerHTML = '<div class="login"><form class="login-box">' + LOGO.replace('class="logo"', 'class="logo big"') +
-      '<h1>SHE PKG</h1><p class="muted">Sistem Mine Permit, SHE &amp; gudang — PT Hamparan Mulya, Site Muara Teweh</p>' +
+    document.body.innerHTML = loginWrap('<form id="flogin">' +
       '<label class="lbl">Email<input type="email" name="email" required autocomplete="username"></label>' +
       '<label class="lbl">Kata sandi<input type="password" name="pw" required autocomplete="current-password"></label>' +
-      '<button class="btn primary block">Masuk</button><div class="login-err err"></div></form></div>';
-    $('form').onsubmit = async e => {
+      '<button class="btn primary block">Masuk</button><div class="login-err err"></div></form>' +
+      '<p class="small center">Belum punya akun? <a href="#" id="kedaftar">Daftar di sini</a></p>');
+    $('#kedaftar').onclick = e => { e.preventDefault(); viewDaftar(); };
+    $('#flogin').onsubmit = async e => {
       e.preventDefault(); const f = e.target, b = $('button', f); busy(b, true, 'Masuk…');
       const { error } = await sb.auth.signInWithPassword({ email: f.email.value.trim(), password: f.pw.value });
-      if (error) { $('.login-err').textContent = error.message === 'Invalid login credentials' ? 'Email atau kata sandi salah.' : error.message; busy(b, false); }
+      if (error) {
+        const m = error.message;
+        $('.login-err').textContent = m === 'Invalid login credentials' ? 'Email atau kata sandi salah.' : /not confirmed/i.test(m) ? 'Akun Anda belum disetujui SPV SHE.' : /banned/i.test(m) ? 'Akun Anda dinonaktifkan.' : m;
+        busy(b, false);
+      }
     };
+  }
+  function viewDaftar() {
+    document.body.innerHTML = loginWrap('<h3>Daftar akun baru</h3><p class="small muted">Setelah mendaftar, akun Anda diperiksa dan disetujui SPV SHE. SPV juga menentukan peran / jabatan Anda di aplikasi.</p>' +
+      '<form id="fdaftar"><label class="lbl">Nama lengkap<input name="nama" required autocomplete="name"></label>' +
+      '<label class="lbl">NIK karyawan <small class="muted">(bila ada)</small><input name="nik"></label>' +
+      '<label class="lbl">Perusahaan<input name="perusahaan" list="dlper" placeholder="mis. PT Hamparan Mulya, PT ABA" required></label>' +
+      '<datalist id="dlper"><option>PT Hamparan Mulya</option><option>PT ABA</option><option>PT CSMU</option><option>PT BAT</option></datalist>' +
+      '<label class="lbl">Jabatan<input name="jabatan" placeholder="mis. Pengawas Pit, Staff SHE" required></label>' +
+      '<label class="lbl">No. HP / WA<input name="hp" type="tel" inputmode="tel"></label>' +
+      '<label class="lbl">Email<input type="email" name="email" required autocomplete="email"></label>' +
+      '<label class="lbl">Kata sandi (min. 8 karakter)<input type="password" name="pw" minlength="8" required autocomplete="new-password"></label>' +
+      '<label class="lbl">Ulangi kata sandi<input type="password" name="pw2" minlength="8" required autocomplete="new-password"></label>' +
+      '<button class="btn primary block">Kirim pendaftaran</button><div class="login-err err"></div></form>' +
+      '<p class="small center"><a href="#" id="kelogin">‹ Kembali ke halaman masuk</a></p>');
+    $('#kelogin').onclick = e => { e.preventDefault(); viewLogin(); };
+    $('#fdaftar').onsubmit = async e => {
+      e.preventDefault(); const f = e.target, b = $('button', f);
+      if (f.pw.value !== f.pw2.value) { $('.login-err').textContent = 'Kata sandi tidak sama.'; return; }
+      busy(b, true, 'Mengirim…');
+      const { data, error } = await sb.auth.signUp({ email: f.email.value.trim(), password: f.pw.value,
+        options: { emailRedirectTo: location.origin + location.pathname,
+          data: { nama: f.nama.value.trim(), nik: f.nik.value.trim(), perusahaan: f.perusahaan.value.trim(), jabatan: f.jabatan.value.trim(), no_hp: f.hp.value.trim() } } });
+      if (error) { $('.login-err').textContent = /registered/i.test(error.message) ? 'Email ini sudah terdaftar.' : error.message; busy(b, false); return; }
+      if (data.session) await sb.auth.signOut();
+      document.body.innerHTML = loginWrap('<div class="note ok"><b>Pendaftaran terkirim.</b><br>Akun Anda menunggu persetujuan SPV SHE. Setelah disetujui, Anda bisa masuk dengan email &amp; kata sandi tadi.</div>' +
+        '<p class="small center"><a href="#" id="kelogin">‹ Ke halaman masuk</a></p>');
+      $('#kelogin').onclick = ev => { ev.preventDefault(); location.reload(); };
+    };
+  }
+  function viewMenunggu() {
+    const p = state.profile || {};
+    const pesan = p.status === 'ditolak' ? 'Pendaftaran Anda ditolak' + (p.catatan ? ': ' + esc(p.catatan) : '.') :
+      p.status === 'nonaktif' ? 'Akun Anda dinonaktifkan' + (p.catatan ? ': ' + esc(p.catatan) : '.') + ' Hubungi SPV SHE.' :
+      'Akun Anda (<b>' + esc(state.user?.email) + '</b>) sedang menunggu persetujuan SPV SHE. Coba masuk lagi setelah disetujui.';
+    document.body.innerHTML = loginWrap('<div class="note ' + (p.status === 'menunggu' || !p.status ? 'warn' : 'err') + '">' + pesan + '</div>' +
+      '<button class="btn block" id="cekulang">Cek lagi</button> <button class="btn ghost block" id="keluar2">Keluar</button>');
+    $('#cekulang').onclick = async () => { await setUser((await sb.auth.getSession()).data.session); document.body.innerHTML = ''; route(); };
+    $('#keluar2').onclick = async () => { await sb.auth.signOut(); location.reload(); };
   }
 
   /* ---------- daftar Mine Permit ---------- */
@@ -454,6 +502,51 @@
     if (u) window.open(u, '_blank'); else toast('Dokumen tidak bisa dibuka', 'err');
   });
 
+  /* ---------- akun pemakai (SPV / Admin) ---------- */
+  const PERAN = [['staff_she', 'Staff SHE — input pengajuan, dokumen, foto, cetak, scan'], ['pengawas', 'Pengawas — scan & catat pelanggaran'], ['viewer', 'Viewer — hanya melihat (mis. KTT)'],
+    ['gudang', 'Admin gudang'], ['pekerja', 'Pekerja — lihat data sendiri'], ['spv', 'SPV SHE — menyetujui Mine Permit & akun'], ['admin', 'Administrator — semua akses']];
+  async function viewAkun(v, params) {
+    const st = params.get('st') || 'menunggu';
+    v.innerHTML = '<div class="page-head"><h1>Akun pemakai</h1></div><div class="tabs">' +
+      [['menunggu', 'Menunggu persetujuan'], ['aktif', 'Aktif'], ['ditolak', 'Ditolak / nonaktif']].map(([k, t]) => '<a href="#/akun?st=' + k + '"' + (k === st ? ' class="on"' : '') + '>' + t + '</a>').join('') + '</div><div id="alist" class="loading">Memuat…</div>';
+    let qy = sb.from('profiles').select('id,nama,email,role,jabatan,perusahaan_teks,no_hp,nik,status,catatan,created_at,karyawan:karyawan_id(nama,nik)').order('created_at', { ascending: false });
+    qy = st === 'ditolak' ? qy.in('status', ['ditolak', 'nonaktif']) : qy.eq('status', st);
+    const data = await q(qy); const L = $('#alist'); if (!L) return; L.className = '';
+    if (!data.length) { L.innerHTML = '<div class="empty">' + (st === 'menunggu' ? 'Tidak ada pendaftaran yang menunggu.' : 'Tidak ada akun.') + '</div>'; return; }
+    const isAdmin = role() === 'admin';
+    L.innerHTML = '<div class="mp-list">' + data.map(a => {
+      const self = a.id === state.user.id, lock = self || (a.role === 'admin' && !isAdmin);
+      return '<div class="box akun" data-id="' + a.id + '"><div class="akun-head"><div><b>' + esc(a.nama) + '</b>' + (a.role ? ' <span class="badge">' + esc(ROLE[a.role] || a.role) + '</span>' : '') +
+        '<br><small class="muted">' + esc(a.email || '') + (a.no_hp ? ' · ' + esc(a.no_hp) : '') + '</small><br><small>' + esc([a.perusahaan_teks, a.jabatan].filter(Boolean).join(' · ') || '-') +
+        (a.nik ? ' · NIK ' + esc(a.nik) : '') + (a.karyawan ? ' · terhubung ke ' + esc(a.karyawan.nama) : '') + '</small>' + (a.catatan ? '<br><small class="err">' + esc(a.catatan) + '</small>' : '') + '</div>' +
+        '<small class="muted">Daftar ' + tgl(a.created_at) + '</small></div>' +
+        (lock ? (self ? '<p class="small muted">Akun Anda sendiri.</p>' : '<p class="small muted">Akun Admin hanya bisa diubah Admin.</p>') :
+        '<form class="akun-form"><div class="grid3"><label class="lbl">Peran di aplikasi<select name="role" required><option value="">— pilih —</option>' +
+          PERAN.filter(([k]) => k !== 'admin' || isAdmin).map(([k, t]) => '<option value="' + k + '"' + (k === a.role ? ' selected' : '') + '>' + t + '</option>').join('') + '</select></label>' +
+          '<label class="lbl">Jabatan / posisi<input name="jabatan" value="' + esc(a.jabatan || '') + '"></label>' +
+          '<label class="lbl">Hubungkan ke data karyawan <small class="muted">(opsional)</small><input name="kcari" placeholder="Ketik NIK / nama" value="' + esc(a.karyawan?.nama || a.nik || '') + '" autocomplete="off"><input type="hidden" name="kid"></label></div>' +
+          '<div class="suggest ksug"></div><div class="actions"><button class="btn primary sm" name="ok">' + (a.status === 'aktif' ? 'Simpan perubahan' : 'Setujui akun') + '</button>' +
+          (a.status === 'menunggu' ? '<button type="button" class="btn danger sm" data-tolak>Tolak</button>' : a.status === 'aktif' ? '<button type="button" class="btn danger sm" data-nonaktif>Nonaktifkan</button>' : '') + '</div></form>') + '</div>';
+    }).join('') + '</div>';
+    $$('.akun').forEach(box => {
+      const f = $('form', box); if (!f) return; const id = box.dataset.id;
+      let t; f.kcari.oninput = () => { f.kid.value = ''; clearTimeout(t); t = setTimeout(async () => {
+        const s2 = f.kcari.value.replace(/[%,()]/g, ' ').trim(); const sug = $('.ksug', box); if (s2.length < 2) { sug.innerHTML = ''; return; }
+        const r = await q(sb.from('karyawan').select('id,nik,nama,jabatan,perusahaan:perusahaan_id(nama)').or('nama.ilike.%' + s2 + '%,nik.ilike.%' + s2 + '%').limit(6));
+        sug.innerHTML = r.map(k => '<button type="button" data-k="' + k.id + '" data-n="' + esc(k.nama) + '" data-j="' + esc(k.jabatan || '') + '">' + esc(k.nama) + ' <small>' + esc(k.nik) + ' · ' + esc(k.perusahaan?.nama) + '</small></button>').join('');
+        $$('[data-k]', sug).forEach(b => b.onclick = () => { f.kid.value = b.dataset.k; f.kcari.value = b.dataset.n; if (!f.jabatan.value && b.dataset.j) f.jabatan.value = b.dataset.j; sug.innerHTML = ''; });
+      }, 250); };
+      f.onsubmit = async e => { e.preventDefault(); const b = f.ok; busy(b, true);
+        try { await q(sb.rpc('setujui_akun', { p_id: id, p_role: f.role.value, p_jabatan: f.jabatan.value, p_karyawan: f.kid.value || null })); toast('Akun disimpan'); route(); }
+        catch (er) { toast(errMsg(er), 'err'); busy(b, false); } };
+      const tolak = $('[data-tolak]', f) || $('[data-nonaktif]', f);
+      if (tolak) tolak.onclick = async () => { const nonaktif = tolak.hasAttribute('data-nonaktif');
+        const a = prompt(nonaktif ? 'Alasan menonaktifkan akun:' : 'Alasan menolak pendaftaran:'); if (a === null) return;
+        try { await q(sb.rpc('tolak_akun', { p_id: id, p_alasan: a, p_status: nonaktif ? 'nonaktif' : 'ditolak' })); toast(nonaktif ? 'Akun dinonaktifkan' : 'Pendaftaran ditolak'); route(); }
+        catch (er) { toast(errMsg(er), 'err'); } };
+    });
+  }
+
   /* ---------- daftar pelanggaran ---------- */
   async function viewPelanggaran(v, params) {
     const f = { per: params.get('per') || '', dari: params.get('dari') || '', q: params.get('q') || '' };
@@ -475,7 +568,7 @@
   async function setUser(session) {
     state.user = session?.user || null;
     if (state.user) {
-      const { data } = await sb.from('profiles').select('id,nama,role,aktif,karyawan_id').eq('id', state.user.id).maybeSingle();
+      const { data } = await sb.from('profiles').select('id,nama,role,aktif,status,catatan,jabatan,karyawan_id').eq('id', state.user.id).maybeSingle();
       state.profile = data;
       try { await loadRef(); } catch (e) { console.error(e); }
     } else state.profile = null;
