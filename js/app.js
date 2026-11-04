@@ -76,9 +76,22 @@
     document.body.innerHTML =
       '<header class="top no-print"><a class="brand" href="#/mp">' + LOGO + '<span><b>SHE PKG</b><small>PT Hamparan Mulya</small></span></a>' +
       '<nav>' + nav.map(([h, t]) => '<a href="#/' + h + '" data-nav="' + h + '">' + t + '</a>').join('') + '</nav>' +
-      '<div class="me"><span>' + esc(state.profile?.nama || state.user?.email) + '<small>' + esc(ROLE[role()] || 'Belum punya peran') + '</small></span><button class="btn sm ghost" id="keluar">Keluar</button></div></header>' +
+      '<div class="me"><span>' + esc(state.profile?.nama || state.user?.email) + '<small>' + esc(ROLE[role()] || 'Belum punya peran') + '</small></span><button class="btn sm ghost" id="sandi" title="Ganti kata sandi">Sandi</button><button class="btn sm ghost" id="keluar">Keluar</button></div></header>' +
       '<main id="view"></main>';
     $('#keluar').onclick = async () => { await sb.auth.signOut(); location.hash = ''; location.reload(); };
+    $('#sandi').onclick = () => {
+      const m = modal('<div class="modal-head"><b>Ganti kata sandi</b><button class="icon-btn" data-x aria-label="Tutup">✕</button></div>' +
+        '<form id="fsandi"><label class="lbl">Kata sandi baru (min. 8 karakter)<input type="password" name="a" minlength="8" required autocomplete="new-password"></label>' +
+        '<label class="lbl">Ulangi kata sandi baru<input type="password" name="b" minlength="8" required autocomplete="new-password"></label>' +
+        '<button class="btn primary block">Simpan kata sandi</button></form>');
+      $('#fsandi', m).onsubmit = async e => {
+        e.preventDefault(); const f = e.target;
+        if (f.a.value !== f.b.value) return toast('Kata sandi tidak sama', 'err');
+        const b = $('button', f); busy(b, true);
+        const { error } = await sb.auth.updateUser({ password: f.a.value });
+        if (error) { toast(errMsg(error), 'err'); busy(b, false); } else { toast('Kata sandi diganti'); m.remove(); }
+      };
+    };
   }
 
   async function route() {
