@@ -13,11 +13,14 @@
   try { state.pilih = new Set(JSON.parse(localStorage.getItem('mp_pilih') || '[]')); } catch (e) { }
   const simpanPilih = () => { try { localStorage.setItem('mp_pilih', JSON.stringify([...state.pilih])); } catch (e) { } };
 
-  const ROLE = { admin: 'Administrator', spv: 'SPV SHE', staff_she: 'Staff SHE', gudang: 'Admin Gudang', pengawas: 'Pengawas', pekerja: 'Pekerja', viewer: 'Viewer' };
+  const ROLE = { admin: 'Administrator', spv: 'SPV SHE', staff_she: 'Staff SHE HM', pic_kontraktor: 'PIC SHE Kontraktor', gudang: 'Admin Gudang', pengawas: 'Pengawas', pekerja: 'Pekerja', viewer: 'Viewer' };
   const role = () => state.profile?.role || '';
   const isShe = () => ['admin', 'spv', 'staff_she'].includes(role());
   const canApprove = () => ['admin', 'spv'].includes(role());
   const canScan = () => isShe() || role() === 'pengawas';
+  const isPic = () => role() === 'pic_kontraktor';
+  const canAjukan = () => isShe() || isPic();
+  const picPer = () => state.perusahaan.find(p => p.id === state.profile?.perusahaan_id);
 
   /* ---------- util UI ---------- */
   function toast(msg, kind) {
@@ -178,7 +181,7 @@
     const f = { q: params.get('q') || '', per: params.get('per') || '', st: params.get('st') || 'aktif', hal: +(params.get('hal') || 0) };
     const N = 40;
     v.innerHTML =
-      '<div class="page-head"><h1>Mine Permit</h1>' + (isShe() ? '<a class="btn primary" href="#/pengajuan/baru">+ Pengajuan baru</a>' : '') + '</div>' +
+      '<div class="page-head"><h1>Mine Permit' + (isPic() && picPer() ? ' — ' + esc(picPer().nama) : '') + '</h1>' + (canAjukan() ? '<a class="btn primary" href="#/pengajuan/baru">+ Pengajuan baru</a>' : '') + '</div>' +
       '<form class="filters" id="fmp"><input type="search" name="q" placeholder="Cari nama, nomor, atau NIK…" value="' + esc(f.q) + '">' +
       '<select name="per"><option value="">Semua perusahaan</option>' + state.perusahaan.map(p => '<option value="' + p.id + '"' + (String(p.id) === f.per ? ' selected' : '') + '>' + esc(p.nama) + '</option>').join('') + '</select>' +
       '<select name="st">' + [['aktif', 'Aktif'], ['habis30', 'Habis ≤ 30 hari'], ['belumcetak', 'Aktif, belum dicetak'], ['kadaluarsa', 'Kadaluarsa'], ['semua', 'Semua status']].map(([k, t]) => '<option value="' + k + '"' + (k === f.st ? ' selected' : '') + '>' + t + '</option>').join('') + '</select>' +
@@ -312,7 +315,7 @@
   /* ---------- pengajuan: daftar ---------- */
   async function viewPengajuanList(v, params) {
     const st = params.get('st') || 'proses';
-    v.innerHTML = '<div class="page-head"><h1>Pengajuan Mine Permit</h1>' + (isShe() ? '<a class="btn primary" href="#/pengajuan/baru">+ Pengajuan baru</a>' : '') + '</div>' +
+    v.innerHTML = '<div class="page-head"><h1>Pengajuan Mine Permit</h1>' + (canAjukan() ? '<a class="btn primary" href="#/pengajuan/baru">+ Pengajuan baru</a>' : '') + '</div>' +
       '<div class="tabs">' + [['proses', 'Dalam proses'], ['menunggu_approval', 'Menunggu persetujuan'], ['disetujui', 'Disetujui'], ['ditolak', 'Ditolak'], ['semua', 'Semua']].map(([k, t]) => '<a href="#/pengajuan?st=' + k + '"' + (k === st ? ' class="on"' : '') + '>' + t + '</a>').join('') + '</div><div id="plist" class="loading">Memuat…</div>';
     let qy = sb.from('kimper_pengajuan').select('id,nomor,jenis,status,akses_kartu,created_at,updated_at,karyawan:karyawan_id(nama,nik,perusahaan:perusahaan_id(nama))').order('updated_at', { ascending: false }).limit(100);
     if (st === 'proses') qy = qy.in('status', ['draft', 'diajukan', 'verifikasi_dok', 'uji']);
@@ -325,7 +328,8 @@
 
   /* ---------- pengajuan: baru ---------- */
   async function viewPengajuanBaru(v, params) {
-    if (!isShe()) { v.innerHTML = '<div class="empty">Pengajuan dibuat oleh tim SHE.</div>'; return; }
+    if (!canAjukan()) { v.innerHTML = '<div class="empty">Pengajuan dibuat oleh tim SHE atau PIC SHE kontraktor.</div>'; return; }
+    if (isPic() && !picPer()) { v.innerHTML = '<div class="empty">Akun PIC Anda belum terhubung ke perusahaan. Hubungi SPV SHE.</div>'; return; }
     const jenis = params.get('jenis') || 'baru';
     let kr = null, lama = null;
     if (params.get('karyawan')) kr = await q(sb.from('karyawan').select('id,nik,nama,jabatan,perusahaan_id,golongan_darah,perusahaan:perusahaan_id(nama)').eq('id', params.get('karyawan')).single());
@@ -339,7 +343,7 @@
       (kr ? '' : '<input type="search" id="krcari" placeholder="Ketik nama atau NIK karyawan…" autocomplete="off"><div id="krhasil" class="suggest"></div>' +
         '<details id="krbaru"><summary>Karyawan belum terdaftar? Tambah baru</summary><div class="grid2">' +
         '<label class="lbl">NIK<input name="nik"></label><label class="lbl">Nama lengkap<input name="nama"></label>' +
-        '<label class="lbl">Perusahaan<select name="perusahaan_id"><option value="">— pilih —</option>' + state.perusahaan.map(p => '<option value="' + p.id + '">' + esc(p.nama) + '</option>').join('') + '</select></label>' +
+        '<label class="lbl">Perusahaan<select name="perusahaan_id"><option value="">— pilih —</option>' + (isPic() ? [picPer()] : state.perusahaan).map(p => '<option value="' + p.id + '"' + (isPic() ? ' selected' : '') + '>' + esc(p.nama) + '</option>').join('') + '</select></label>' +
         '<label class="lbl">Jabatan<input name="jabatan"></label>' +
         '<label class="lbl">Subkon / vendor (keterangan)<input name="subkon" placeholder="boleh kosong"></label>' +
         '<label class="lbl">Gol. darah<select name="gd"><option value="">—</option>' + ['A', 'B', 'AB', 'O', 'A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].map(g => '<option>' + g + '</option>').join('') + '</select></label>' +
@@ -362,7 +366,7 @@
     if (cari) {
       let t; cari.oninput = () => { clearTimeout(t); t = setTimeout(async () => {
         const s = cari.value.replace(/[%,()]/g, ' ').trim(); if (s.length < 2) { $('#krhasil').innerHTML = ''; return; }
-        const r = await q(sb.from('karyawan').select('id,nik,nama,jabatan,perusahaan_id,perusahaan:perusahaan_id(nama)').or('nama.ilike.%' + s + '%,nik.ilike.%' + s + '%').eq('aktif', true).limit(8));
+        const r = await q(sb.from('karyawan').select('id,nik,nama,jabatan,perusahaan_id,perusahaan:perusahaan_id(nama)').or('nama.ilike.%' + s + '%,nik.ilike.%' + s + '%').eq('aktif', true).match(isPic() ? { perusahaan_id: state.profile.perusahaan_id } : {}).limit(8));
         $('#krhasil').innerHTML = r.map(k => '<button type="button" data-k=\'' + esc(JSON.stringify(k)) + '\'>' + esc(k.nama) + ' <small>' + esc(k.nik) + ' · ' + esc(k.perusahaan?.nama) + '</small></button>').join('') || '<div class="muted small">Tidak ditemukan — tambah karyawan baru di bawah.</div>';
         $$('#krhasil [data-k]').forEach(b => b.onclick = async () => {
           pilihKr = JSON.parse(b.dataset.k); $('#krpick').innerHTML = krChip(pilihKr); $('#krhasil').innerHTML = ''; cari.value = ''; $('#krbaru').open = false;
@@ -375,6 +379,7 @@
     }
     $('#fbaru').onsubmit = async e => {
       e.preventDefault(); const f = e.target, b = $('#simpanbaru');
+      if (isPic() && pilihKr && pilihKr.perusahaan_id !== state.profile.perusahaan_id) return toast('Karyawan ini bukan dari ' + picPer().nama, 'err');
       const units = $$('input[name=u]:checked', f).map(c => ({ jenis_unit: c.value, akses: (f['a_' + c.value].value || 'F') }));
       if (!units.length) return toast('Pilih minimal satu unit', 'err');
       busy(b, true);
@@ -412,6 +417,8 @@
     const docBy = Object.fromEntries(docs.map(d => [d.syarat_kode, d]));
     const fotoU = await fotoUrl(k.foto_path);
     const final = ['disetujui', 'ditolak'].includes(p.status);
+    const picBoleh = isPic() && ['draft', 'diajukan', 'verifikasi_dok'].includes(p.status);
+    const bisaFoto = (isShe() && !final) || picBoleh;
     const idx = ALUR.indexOf(p.status);
     const nl = state.setting.kimper_nilai_lulus || {};
     v.innerHTML = '<div class="page-head"><div><a href="#/pengajuan" class="back">‹ Pengajuan</a><h1>' + esc(k.nama) + '</h1><div class="muted">' + esc(p.nomor) + ' · ' + JENIS_P[p.jenis] + ' · ' + esc(k.perusahaan?.nama) + ' · NIK ' + esc(k.nik) + '</div></div>' +
@@ -421,9 +428,9 @@
       '<div class="detail-grid"><section>' +
         '<div class="box"><h3>Pas foto Mine Permit</h3><div class="foto-row"><span class="thumb lg">' + (fotoU ? '<img src="' + esc(fotoU) + '" alt="">' : '') + '</span><div>' +
           (k.foto_path ? '<p class="small">' + ({ otomatis: 'Diatur otomatis dari wajah.', manual: 'Diatur manual.', resolusi_rendah: 'Foto kecil — hasil cetak kurang tajam.', wajah_tidak_terdeteksi: 'Wajah tidak terdeteksi — cek posisi.', kepala_terpotong: 'Kepala terpotong — sebaiknya foto ulang.', perlu_diganti: 'Foto wajib diganti.' }[k.foto_status] || '') + '</p>' : '<p class="small warn">Belum ada foto.</p>') +
-          (isShe() && !final ? '<button class="btn sm" id="pfoto">' + (k.foto_path ? 'Ganti / atur foto' : 'Ambil / unggah foto') + '</button>' : '') + '</div></div></div>' +
+          (bisaFoto ? '<button class="btn sm" id="pfoto">' + (k.foto_path ? 'Ganti / atur foto' : 'Ambil / unggah foto') + '</button>' : '') + '</div></div></div>' +
         '<div class="box"><h3>Data pengajuan</h3><dl>' +
-          '<dt>Akses</dt><dd>' + (isShe() && !final ? '<select id="pakses"><option' + (p.akses_kartu === 'FULL' ? ' selected' : '') + ' value="FULL">FULL ACCESS</option><option' + (p.akses_kartu === 'RESTRICTED' ? ' selected' : '') + ' value="RESTRICTED">RESTRICTED</option></select>' : esc(p.akses_kartu)) + '</dd>' +
+          '<dt>Akses</dt><dd>' + ((isShe() && !final) || (isPic() && p.status === 'draft') ? '<select id="pakses"><option' + (p.akses_kartu === 'FULL' ? ' selected' : '') + ' value="FULL">FULL ACCESS</option><option' + (p.akses_kartu === 'RESTRICTED' ? ' selected' : '') + ' value="RESTRICTED">RESTRICTED</option></select>' : esc(p.akses_kartu)) + '</dd>' +
           '<dt>SIM</dt><dd>' + esc(p.sim_jenis || '-') + ' · ' + esc(p.sim_nomor || '-') + ' · s/d ' + tgl(p.sim_berlaku) + '</dd>' +
           '<dt>Gol. darah</dt><dd>' + esc(k.golongan_darah || '-') + '</dd>' +
           (p.catatan ? '<dt>Catatan</dt><dd>' + esc(p.catatan) + '</dd>' : '') +
@@ -431,6 +438,7 @@
         '<div class="box"><h3>Dokumen persyaratan</h3><ul class="docs">' + syarat.map(s => { const d = docBy[s.kode];
           return '<li><div><b>' + esc(s.nama) + '</b>' + (s.wajib ? '' : ' <small class="muted">(bila perlu)</small>') + '<br><small class="doc-st ' + (d?.status || 'belum') + '">' + ({ diunggah: 'Diunggah — menunggu diperiksa', valid: 'Valid', tidak_valid: 'Tidak valid' + (d?.catatan ? ': ' + esc(d.catatan) : '') }[d?.status] || 'Belum diunggah') + '</small></div>' +
             '<div class="doc-act">' + (d?.path ? '<button class="btn sm ghost" data-lihat="' + esc(d.path) + '">Lihat</button>' : '') +
+            (picBoleh && d?.status !== 'valid' ? '<label class="btn sm">' + (d ? 'Ganti' : 'Unggah') + '<input type="file" accept="image/*,application/pdf" hidden data-up="' + s.kode + '"></label>' : '') +
             (isShe() && !final ? (s.kode === 'FOTO' && k.foto_path ? '<button class="btn sm" data-pakaifoto="' + s.kode + '">Pakai pas foto</button>' : '') + '<label class="btn sm">Unggah<input type="file" accept="image/*,application/pdf" hidden data-up="' + s.kode + '"></label>' +
               (d && d.status !== 'valid' ? '<button class="btn sm ok" data-valid="' + d.id + '">Valid</button>' : '') + (d && d.status !== 'tidak_valid' ? '<button class="btn sm danger" data-tdk="' + d.id + '">Tidak valid</button>' : '') : '') + '</div></li>'; }).join('') + '</ul></div>' +
       '</section><section>' +
@@ -445,13 +453,13 @@
 
     // tombol alur
     const act = $('#pact'); const btns = [];
-    if (isShe() && p.status === 'draft') btns.push(['diajukan', 'Ajukan', 'primary']);
+    if ((isShe() || isPic()) && p.status === 'draft') btns.push(['diajukan', isPic() ? 'Kirim ke SHE HM' : 'Ajukan', 'primary']);
     if (isShe() && p.status === 'diajukan') btns.push(['verifikasi_dok', 'Mulai verifikasi dokumen', 'primary']);
     if (isShe() && p.status === 'verifikasi_dok') btns.push(['uji', 'Dokumen selesai → uji unit', 'primary']);
     if (isShe() && p.status === 'uji') btns.push(['menunggu_approval', 'Kirim ke SPV untuk persetujuan', 'primary']);
     if (canApprove() && p.status === 'menunggu_approval') btns.push(['disetujui', p.jenis === 'perpanjangan' ? 'Setujui & perpanjang' : 'Setujui & terbitkan Mine Permit', 'primary']);
     if (isShe() && !final) btns.push(['ditolak', 'Tolak', 'danger']);
-    if (isShe() && p.status === 'draft') btns.push(['hapus', 'Hapus draft', 'ghost']);
+    if ((isShe() || isPic()) && p.status === 'draft') btns.push(['hapus', 'Hapus draft', 'ghost']);
     if (p.status === 'disetujui' && p.kimper_id) btns.push(['lihat', 'Buka Mine Permit', 'primary'], ['cetak', 'Cetak', '']);
     act.innerHTML = btns.map(([s, t, c]) => '<button class="btn ' + c + '" data-go="' + s + '">' + t + '</button>').join('') || '<span class="muted">Tidak ada tindakan untuk peran Anda.</span>';
     $$('[data-go]', act).forEach(b => b.onclick = async () => {
@@ -467,9 +475,8 @@
         toast(s === 'disetujui' ? 'Disetujui — Mine Permit terbit' : 'Status: ' + PST[s]); route();
       } catch (er) { toast(errMsg(er), 'err'); busy(b, false); }
     });
-    if (!isShe() || final) return;
-    $('#pfoto').onclick = () => FotoEditor.open({ karyawan: k, sb, onSaved: () => route() });
-    $('#pakses').onchange = async e => { try { await q(sb.from('kimper_pengajuan').update({ akses_kartu: e.target.value }).eq('id', id)); toast('Akses diperbarui'); } catch (er) { toast(errMsg(er), 'err'); } };
+    if ($('#pfoto')) $('#pfoto').onclick = () => FotoEditor.open({ karyawan: k, sb, onSaved: () => route() });
+    if ($('#pakses')) $('#pakses').onchange = async e => { try { await q(sb.from('kimper_pengajuan').update({ akses_kartu: e.target.value }).eq('id', id)); toast('Akses diperbarui'); } catch (er) { toast(errMsg(er), 'err'); } };
     $$('tr[data-uid] [data-f]').forEach(inp => inp.onchange = async () => {
       const tr = inp.closest('tr'), val = inp.dataset.f === 'akses' ? inp.value : (inp.value === '' ? null : +inp.value);
       try {
@@ -503,26 +510,28 @@
   });
 
   /* ---------- akun pemakai (SPV / Admin) ---------- */
-  const PERAN = [['staff_she', 'Staff SHE — input pengajuan, dokumen, foto, cetak, scan'], ['pengawas', 'Pengawas — scan & catat pelanggaran'], ['viewer', 'Viewer — hanya melihat (mis. KTT)'],
+  const PERAN = [['staff_she', 'Staff SHE HM — bawahan SPV SHE: proses pengajuan, dokumen, uji, foto, cetak, scan'], ['pic_kontraktor', 'PIC SHE Kontraktor — mengajukan Mine Permit karyawan perusahaannya'], ['pengawas', 'Pengawas — scan & catat pelanggaran'], ['viewer', 'Viewer — hanya melihat (mis. KTT)'],
     ['gudang', 'Admin gudang'], ['pekerja', 'Pekerja — lihat data sendiri'], ['spv', 'SPV SHE — menyetujui Mine Permit & akun'], ['admin', 'Administrator — semua akses']];
   async function viewAkun(v, params) {
     const st = params.get('st') || 'menunggu';
     v.innerHTML = '<div class="page-head"><h1>Akun pemakai</h1></div><div class="tabs">' +
       [['menunggu', 'Menunggu persetujuan'], ['aktif', 'Aktif'], ['ditolak', 'Ditolak / nonaktif']].map(([k, t]) => '<a href="#/akun?st=' + k + '"' + (k === st ? ' class="on"' : '') + '>' + t + '</a>').join('') + '</div><div id="alist" class="loading">Memuat…</div>';
-    let qy = sb.from('profiles').select('id,nama,email,role,jabatan,perusahaan_teks,no_hp,nik,status,catatan,created_at,karyawan:karyawan_id(nama,nik)').order('created_at', { ascending: false });
+    let qy = sb.from('profiles').select('id,nama,email,role,jabatan,perusahaan_id,perusahaan_teks,no_hp,nik,status,catatan,created_at,karyawan:karyawan_id(nama,nik)').order('created_at', { ascending: false });
     qy = st === 'ditolak' ? qy.in('status', ['ditolak', 'nonaktif']) : qy.eq('status', st);
     const data = await q(qy); const L = $('#alist'); if (!L) return; L.className = '';
     if (!data.length) { L.innerHTML = '<div class="empty">' + (st === 'menunggu' ? 'Tidak ada pendaftaran yang menunggu.' : 'Tidak ada akun.') + '</div>'; return; }
     const isAdmin = role() === 'admin';
     L.innerHTML = '<div class="mp-list">' + data.map(a => {
       const self = a.id === state.user.id, lock = self || (a.role === 'admin' && !isAdmin);
-      return '<div class="box akun" data-id="' + a.id + '"><div class="akun-head"><div><b>' + esc(a.nama) + '</b>' + (a.role ? ' <span class="badge">' + esc(ROLE[a.role] || a.role) + '</span>' : '') +
+      return '<div class="box akun" data-id="' + a.id + '"><div class="akun-head"><div><b>' + esc(a.nama) + '</b>' + (a.role ? ' <span class="badge">' + esc(ROLE[a.role] || a.role) + (a.role === 'pic_kontraktor' ? ' · ' + esc(state.perusahaan.find(x => x.id === a.perusahaan_id)?.kode || '?') : '') + '</span>' : '') +
         '<br><small class="muted">' + esc(a.email || '') + (a.no_hp ? ' · ' + esc(a.no_hp) : '') + '</small><br><small>' + esc([a.perusahaan_teks, a.jabatan].filter(Boolean).join(' · ') || '-') +
         (a.nik ? ' · NIK ' + esc(a.nik) : '') + (a.karyawan ? ' · terhubung ke ' + esc(a.karyawan.nama) : '') + '</small>' + (a.catatan ? '<br><small class="err">' + esc(a.catatan) + '</small>' : '') + '</div>' +
         '<small class="muted">Daftar ' + tgl(a.created_at) + '</small></div>' +
         (lock ? (self ? '<p class="small muted">Akun Anda sendiri.</p>' : '<p class="small muted">Akun Admin hanya bisa diubah Admin.</p>') :
         '<form class="akun-form"><div class="grid3"><label class="lbl">Peran di aplikasi<select name="role" required><option value="">— pilih —</option>' +
           PERAN.filter(([k]) => k !== 'admin' || isAdmin).map(([k, t]) => '<option value="' + k + '"' + (k === a.role ? ' selected' : '') + '>' + t + '</option>').join('') + '</select></label>' +
+          '<label class="lbl per-pic"' + (a.role === 'pic_kontraktor' ? '' : ' hidden') + '>Perusahaan kontraktor<select name="per"><option value="">— pilih —</option>' +
+            state.perusahaan.filter(x => x.kode !== 'HM').map(x => '<option value="' + x.id + '" data-kode="' + esc(x.kode || '') + '"' + (x.id === a.perusahaan_id ? ' selected' : '') + '>' + esc(x.nama) + '</option>').join('') + '</select></label>' +
           '<label class="lbl">Jabatan / posisi<input name="jabatan" value="' + esc(a.jabatan || '') + '"></label>' +
           '<label class="lbl">Hubungkan ke data karyawan <small class="muted">(opsional)</small><input name="kcari" placeholder="Ketik NIK / nama" value="' + esc(a.karyawan?.nama || a.nik || '') + '" autocomplete="off"><input type="hidden" name="kid"></label></div>' +
           '<div class="suggest ksug"></div><div class="actions"><button class="btn primary sm" name="ok">' + (a.status === 'aktif' ? 'Simpan perubahan' : 'Setujui akun') + '</button>' +
@@ -530,6 +539,17 @@
     }).join('') + '</div>';
     $$('.akun').forEach(box => {
       const f = $('form', box); if (!f) return; const id = box.dataset.id;
+      const isiJab = () => { const r = f.role.value, kode = f.per.selectedOptions[0]?.dataset.kode, j = f.jabatan.value.trim();
+        const otomatis = !j || /^(PIC SHE|Staff SHE HM|SPV SHE)\b/i.test(j);
+        if (!otomatis) return;
+        if (r === 'pic_kontraktor') f.jabatan.value = kode ? 'PIC SHE ' + kode : 'PIC SHE';
+        else if (r === 'staff_she') f.jabatan.value = 'Staff SHE HM';
+        else if (r === 'spv') f.jabatan.value = 'SPV SHE'; };
+      f.role.onchange = () => { $('.per-pic', f).hidden = f.role.value !== 'pic_kontraktor'; isiJab(); };
+      f.per.onchange = isiJab;
+      // tebak perusahaan dari isian pendaftar
+      if (!f.per.value) { const a0 = data.find(x => x.id === id), tx = (a0?.perusahaan_teks || '').toUpperCase();
+        const g = state.perusahaan.find(x => x.kode && x.kode !== 'HM' && new RegExp('\\b' + x.kode + '\\b').test(tx)); if (g) f.per.value = g.id; }
       let t; f.kcari.oninput = () => { f.kid.value = ''; clearTimeout(t); t = setTimeout(async () => {
         const s2 = f.kcari.value.replace(/[%,()]/g, ' ').trim(); const sug = $('.ksug', box); if (s2.length < 2) { sug.innerHTML = ''; return; }
         const r = await q(sb.from('karyawan').select('id,nik,nama,jabatan,perusahaan:perusahaan_id(nama)').or('nama.ilike.%' + s2 + '%,nik.ilike.%' + s2 + '%').limit(6));
@@ -537,7 +557,8 @@
         $$('[data-k]', sug).forEach(b => b.onclick = () => { f.kid.value = b.dataset.k; f.kcari.value = b.dataset.n; if (!f.jabatan.value && b.dataset.j) f.jabatan.value = b.dataset.j; sug.innerHTML = ''; });
       }, 250); };
       f.onsubmit = async e => { e.preventDefault(); const b = f.ok; busy(b, true);
-        try { await q(sb.rpc('setujui_akun', { p_id: id, p_role: f.role.value, p_jabatan: f.jabatan.value, p_karyawan: f.kid.value || null })); toast('Akun disimpan'); route(); }
+        try { if (f.role.value === 'pic_kontraktor' && !f.per.value) throw new Error('Pilih perusahaan kontraktor untuk PIC');
+          await q(sb.rpc('setujui_akun', { p_id: id, p_role: f.role.value, p_jabatan: f.jabatan.value, p_karyawan: f.kid.value || null, p_perusahaan: f.role.value === 'pic_kontraktor' ? +f.per.value : null })); toast('Akun disimpan'); route(); }
         catch (er) { toast(errMsg(er), 'err'); busy(b, false); } };
       const tolak = $('[data-tolak]', f) || $('[data-nonaktif]', f);
       if (tolak) tolak.onclick = async () => { const nonaktif = tolak.hasAttribute('data-nonaktif');
@@ -568,7 +589,7 @@
   async function setUser(session) {
     state.user = session?.user || null;
     if (state.user) {
-      const { data } = await sb.from('profiles').select('id,nama,role,aktif,status,catatan,jabatan,karyawan_id').eq('id', state.user.id).maybeSingle();
+      const { data } = await sb.from('profiles').select('id,nama,role,aktif,status,catatan,jabatan,karyawan_id,perusahaan_id').eq('id', state.user.id).maybeSingle();
       state.profile = data;
       try { await loadRef(); } catch (e) { console.error(e); }
     } else state.profile = null;
