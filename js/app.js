@@ -275,7 +275,7 @@
   }
   // filter daftar Mine Permit (dipakai daftar & "pilih semua hasil"); urutan sama dengan daftar
   function filterMP(qy, f) {
-    if (f.q) { const s = f.q.replace(/[%,()]/g, ' ').trim(); qy = qy.or('nama.ilike.%' + s + '%,nomor.ilike.%' + s + '%,nik.ilike.%' + s + '%'); }
+    if (f.q) { const s = f.q.replace(/[%,()]/g, ' ').trim(); qy = qy.or('nama.ilike.%' + s + '%,nomor.ilike.%' + s + '%,nik.ilike.%' + s + '%,nomor_lama.ilike.%' + s + '%'); }
     if (f.per) qy = qy.eq('perusahaan_id', f.per);
     if (f.st === 'aktif') qy = qy.eq('status', 'aktif');
     if (f.st === 'kadaluarsa') qy = qy.eq('status', 'kadaluarsa');

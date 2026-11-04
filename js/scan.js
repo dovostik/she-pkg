@@ -34,10 +34,10 @@
       try {
         const rows = [];
         for (let i = 0; ; i += 1000) {
-          const r = await A().q(A().sb.from('v_mine_permit').select('id,nomor,nama,perusahaan,jabatan,karyawan_id,status,berlaku_sampai,akses_kartu,token_qr,unit,jml_pelanggaran')
+          const r = await A().q(A().sb.from('v_mine_permit').select('id,nomor,nama,perusahaan,jabatan,karyawan_id,status,berlaku_sampai,akses_kartu,token_qr,unit,jml_pelanggaran,nomor_lama')
             .in('status', ['aktif', 'ditangguhkan', 'dicabut', 'kadaluarsa']).order('id').range(i, i + 999));
           rows.push(...r.map(x => [x.token_qr.slice(0, 12), x.id, x.nomor, x.nama, x.perusahaan, x.jabatan, x.karyawan_id, x.status, x.berlaku_sampai, x.akses_kartu,
-            (x.unit || []).map(u => u.nama + ' (' + u.akses + ')'), x.jml_pelanggaran]));
+            (x.unit || []).map(u => u.nama + ' (' + u.akses + ')'), x.jml_pelanggaran, x.nomor_lama || '']));
           if (r.length < 1000) break;
         }
         ls.set(KEY_OFF, { at: Date.now(), rows });
@@ -50,7 +50,7 @@
     status: x[7] === 'aktif' && x[8] < new Date(Date.now() + 7 * 3600e3).toISOString().slice(0, 10) ? 'kadaluarsa' : x[7], offline: true });
   function cariOffline(id12) { const d = ls.get(KEY_OFF, null); const x = d && id12 && d.rows.find(r => r[0] === id12.slice(0, 12)); return x ? dariBaris(x) : null; }
   function cariOfflineTeks(t) { const d = ls.get(KEY_OFF, null); if (!d) return []; const n = t.toLowerCase();
-    return d.rows.filter(r => (r[2] || '').toLowerCase().includes(n) || (r[3] || '').toLowerCase().includes(n)).slice(0, 8).map(r => ({ token_qr: r[0], nomor: r[2], nama: r[3], perusahaan: r[4], status: r[7] })); }
+    return d.rows.filter(r => (r[2] || '').toLowerCase().includes(n) || (r[3] || '').toLowerCase().includes(n) || (r[12] || '').toLowerCase().includes(n)).slice(0, 8).map(r => ({ token_qr: r[0], nomor: r[2], nama: r[3], perusahaan: r[4], status: r[7] })); }
   function infoOffline() { const el = $('#offinfo'); if (!el) return; const d = ls.get(KEY_OFF, null);
     el.innerHTML = d ? 'Data offline: ' + d.rows.length + ' Mine Permit, diperbarui ' + new Date(d.at).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }) + (navigator.onLine ? ' · <a href="#" id="syncnow">perbarui</a>' : '')
       : (navigator.onLine ? 'Menyiapkan data offline…' : 'Belum ada data offline — buka halaman ini sekali saat ada sinyal.');
@@ -110,7 +110,7 @@
       if (!navigator.onLine) { const r = cariOfflineTeks(s);
         $('#hasil').innerHTML = r.length ? '<div class="suggest">' + r.map(x => '<button type="button" data-t="' + x.token_qr + '">' + A().esc(x.nama) + ' <small>' + A().esc(x.nomor) + ' · ' + A().esc(x.perusahaan) + ' · ' + x.status + '</small></button>').join('') + '</div>' : '<div class="empty">Tidak ditemukan di data offline.</div>';
         document.querySelectorAll('#hasil [data-t]').forEach(b => b.onclick = () => tampil(b.dataset.t, 'manual')); return; }
-      try { const r = await A().q(A().sb.from('v_mine_permit').select('id,nomor,nama,perusahaan,status,token_qr').or('nomor.ilike.%' + s + '%,nama.ilike.%' + s + '%').order('berlaku_sampai', { ascending: false }).limit(8));
+      try { const r = await A().q(A().sb.from('v_mine_permit').select('id,nomor,nama,perusahaan,status,token_qr').or('nomor.ilike.%' + s + '%,nama.ilike.%' + s + '%,nomor_lama.ilike.%' + s + '%').order('berlaku_sampai', { ascending: false }).limit(8));
         $('#hasil').innerHTML = r.length ? '<div class="suggest">' + r.map(x => '<button type="button" data-t="' + x.token_qr + '">' + A().esc(x.nama) + ' <small>' + A().esc(x.nomor) + ' · ' + A().esc(x.perusahaan) + ' · ' + x.status + '</small></button>').join('') + '</div>' : '<div class="empty">Tidak ditemukan.</div>';
         document.querySelectorAll('#hasil [data-t]').forEach(b => b.onclick = () => tampil(b.dataset.t, 'manual'));
       } catch (er) { A().toast('Pencarian butuh sinyal: ' + A().errMsg(er), 'err'); }
