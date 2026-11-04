@@ -99,6 +99,8 @@
   }
 
   async function route() {
+    if (/^#(access_token|error)=/.test(location.hash)) history.replaceState(null, '', location.pathname + location.search + '#/');
+    if (state.recovery) return state.user ? viewSandiBaru() : viewLogin('Tautan reset sandi tidak valid atau sudah kadaluarsa. Minta tautan baru.');
     if (!state.user) return viewLogin();
     if (!state.profile || !state.profile.aktif || !state.profile.role) return viewMenunggu();
     if (!$('#view')) shell();
@@ -120,13 +122,15 @@
   /* ---------- login, daftar akun, menunggu persetujuan ---------- */
   const loginWrap = inner => '<div class="login"><div class="login-box">' + LOGO.replace('class="logo"', 'class="logo big"') +
     '<h1>SHE PKG</h1><p class="muted">Sistem Mine Permit, SHE &amp; gudang — PT Hamparan Mulya, Site Muara Teweh</p>' + inner + '</div></div>';
-  function viewLogin() {
-    document.body.innerHTML = loginWrap('<form id="flogin">' +
+  function viewLogin(pesan) {
+    document.body.innerHTML = loginWrap((pesan ? '<div class="note warn">' + esc(pesan) + '</div>' : '') + '<form id="flogin">' +
       '<label class="lbl">Email<input type="email" name="email" required autocomplete="username"></label>' +
       '<label class="lbl">Kata sandi<input type="password" name="pw" required autocomplete="current-password"></label>' +
       '<button class="btn primary block">Masuk</button><div class="login-err err"></div></form>' +
+      '<p class="small center"><a href="#" id="kelupa">Lupa kata sandi?</a></p>' +
       '<p class="small center">Belum punya akun? <a href="#" id="kedaftar">Daftar di sini</a></p>');
     $('#kedaftar').onclick = e => { e.preventDefault(); viewDaftar(); };
+    $('#kelupa').onclick = e => { e.preventDefault(); viewLupa($('#flogin').email.value.trim()); };
     $('#flogin').onsubmit = async e => {
       e.preventDefault(); const f = e.target, b = $('button', f); busy(b, true, 'Masuk…');
       const { error } = await sb.auth.signInWithPassword({ email: f.email.value.trim(), password: f.pw.value });
@@ -163,6 +167,37 @@
       document.body.innerHTML = loginWrap('<div class="note ok"><b>Pendaftaran terkirim.</b><br>Akun Anda menunggu persetujuan SPV SHE. Setelah disetujui, Anda bisa masuk dengan email &amp; kata sandi tadi.</div>' +
         '<p class="small center"><a href="#" id="kelogin">‹ Ke halaman masuk</a></p>');
       $('#kelogin').onclick = ev => { ev.preventDefault(); location.reload(); };
+    };
+  }
+  function viewLupa(email) {
+    document.body.innerHTML = loginWrap('<h3>Lupa kata sandi</h3><p class="small muted">Masukkan email akun Anda. Kami kirim tautan untuk membuat kata sandi baru.</p>' +
+      '<form id="flupa"><label class="lbl">Email<input type="email" name="email" required autocomplete="email" value="' + esc(email || '') + '"></label>' +
+      '<button class="btn primary block">Kirim tautan reset</button><div class="login-err err"></div></form>' +
+      '<p class="small center"><a href="#" id="kelogin">‹ Kembali ke halaman masuk</a></p>');
+    $('#kelogin').onclick = e => { e.preventDefault(); viewLogin(); };
+    $('#flupa').onsubmit = async e => {
+      e.preventDefault(); const f = e.target, b = $('button', f); busy(b, true, 'Mengirim…');
+      const { error } = await sb.auth.resetPasswordForEmail(f.email.value.trim(), { redirectTo: location.origin + location.pathname + '?reset=1' });
+      if (error) { $('.login-err').textContent = /rate|limit|seconds/i.test(error.message) ? 'Terlalu sering meminta. Tunggu sebentar lalu coba lagi.' : error.message; busy(b, false); return; }
+      document.body.innerHTML = loginWrap('<div class="note ok"><b>Tautan reset dikirim</b> bila email <b>' + esc(f.email.value.trim()) + '</b> terdaftar. Buka email (cek juga folder Spam), lalu klik tautannya untuk membuat kata sandi baru.</div>' +
+        '<p class="small muted">Tidak menerima email dalam beberapa menit? Minta SPV SHE mereset sandi Anda dari menu Akun.</p>' +
+        '<p class="small center"><a href="#" id="kelogin">‹ Ke halaman masuk</a></p>');
+      $('#kelogin').onclick = ev => { ev.preventDefault(); viewLogin(); };
+    };
+  }
+  function viewSandiBaru() {
+    document.body.innerHTML = loginWrap('<h3>Buat kata sandi baru</h3><p class="small muted">Akun: <b>' + esc(state.user?.email || '') + '</b></p>' +
+      '<form id="fbaru2"><label class="lbl">Kata sandi baru (min. 8 karakter)<input type="password" name="pw" minlength="8" required autocomplete="new-password"></label>' +
+      '<label class="lbl">Ulangi kata sandi baru<input type="password" name="pw2" minlength="8" required autocomplete="new-password"></label>' +
+      '<button class="btn primary block">Simpan kata sandi</button><div class="login-err err"></div></form>');
+    $('#fbaru2').onsubmit = async e => {
+      e.preventDefault(); const f = e.target, b = $('button', f);
+      if (f.pw.value !== f.pw2.value) { $('.login-err').textContent = 'Kata sandi tidak sama.'; return; }
+      busy(b, true, 'Menyimpan…');
+      const { error } = await sb.auth.updateUser({ password: f.pw.value });
+      if (error) { $('.login-err').textContent = /different|same/i.test(error.message) ? 'Kata sandi baru harus berbeda dari yang lama.' : error.message; busy(b, false); return; }
+      state.recovery = false; history.replaceState(null, '', location.pathname + '#/');
+      toast('Kata sandi baru tersimpan'); document.body.innerHTML = ''; route();
     };
   }
   function viewMenunggu() {
@@ -535,7 +570,7 @@
           '<label class="lbl">Jabatan / posisi<input name="jabatan" value="' + esc(a.jabatan || '') + '"></label>' +
           '<label class="lbl">Hubungkan ke data karyawan <small class="muted">(opsional)</small><input name="kcari" placeholder="Ketik NIK / nama" value="' + esc(a.karyawan?.nama || a.nik || '') + '" autocomplete="off"><input type="hidden" name="kid"></label></div>' +
           '<div class="suggest ksug"></div><div class="actions"><button class="btn primary sm" name="ok">' + (a.status === 'aktif' ? 'Simpan perubahan' : 'Setujui akun') + '</button>' +
-          (a.status === 'menunggu' ? '<button type="button" class="btn danger sm" data-tolak>Tolak</button>' : a.status === 'aktif' ? '<button type="button" class="btn danger sm" data-nonaktif>Nonaktifkan</button>' : '') + '</div></form>') + '</div>';
+          (a.status === 'menunggu' ? '<button type="button" class="btn danger sm" data-tolak>Tolak</button>' : a.status === 'aktif' ? '<button type="button" class="btn sm" data-reset>Reset sandi</button><button type="button" class="btn danger sm" data-nonaktif>Nonaktifkan</button>' : '') + '</div></form>') + '</div>';
     }).join('') + '</div>';
     $$('.akun').forEach(box => {
       const f = $('form', box); if (!f) return; const id = box.dataset.id;
@@ -560,6 +595,17 @@
         try { if (f.role.value === 'pic_kontraktor' && !f.per.value) throw new Error('Pilih perusahaan kontraktor untuk PIC');
           await q(sb.rpc('setujui_akun', { p_id: id, p_role: f.role.value, p_jabatan: f.jabatan.value, p_karyawan: f.kid.value || null, p_perusahaan: f.role.value === 'pic_kontraktor' ? +f.per.value : null })); toast('Akun disimpan'); route(); }
         catch (er) { toast(errMsg(er), 'err'); busy(b, false); } };
+      const rs = $('[data-reset]', f);
+      if (rs) rs.onclick = async () => { const a0 = data.find(x => x.id === id);
+        if (!confirm('Buat sandi sementara baru untuk ' + (a0?.nama || 'akun ini') + '? Sandi lama tidak berlaku lagi.')) return;
+        try { const pw = await q(sb.rpc('reset_sandi_akun', { p_id: id }));
+          const m = document.createElement('div'); m.className = 'modal';
+          m.innerHTML = '<div class="modal-box"><h3>Sandi sementara</h3><p class="small">Berikan ke <b>' + esc(a0?.nama || '') + '</b> (' + esc(a0?.email || '') + '). Minta segera diganti lewat tombol <b>Sandi</b> setelah masuk.</p>' +
+            '<p class="pw-box">' + esc(pw) + '</p><div class="actions"><button class="btn" id="salinpw">Salin</button><button class="btn primary" id="tutuppw">Tutup</button></div></div>';
+          document.body.appendChild(m);
+          $('#salinpw', m).onclick = async () => { try { await navigator.clipboard.writeText(pw); toast('Disalin'); } catch (e) { toast('Salin manual', 'err'); } };
+          $('#tutuppw', m).onclick = () => m.remove();
+        } catch (er) { toast(errMsg(er), 'err'); } };
       const tolak = $('[data-tolak]', f) || $('[data-nonaktif]', f);
       if (tolak) tolak.onclick = async () => { const nonaktif = tolak.hasAttribute('data-nonaktif');
         const a = prompt(nonaktif ? 'Alasan menonaktifkan akun:' : 'Alasan menolak pendaftaran:'); if (a === null) return;
@@ -596,8 +642,11 @@
   }
   window.App = { sb, esc, toast, fotoUrl, fotoUrls, clearFotoCache, state, q, errMsg, tgl, jam, isShe, canScan, modal, busy, statusBadge, route };
   (async () => {
+    state.recovery = new URLSearchParams(location.search).has('reset');
     const { data } = await sb.auth.getSession(); await setUser(data.session);
     sb.auth.onAuthStateChange(async (ev, session) => {
+      if (ev === 'PASSWORD_RECOVERY') { state.recovery = true; await setUser(session); return viewSandiBaru(); }
+      if (state.recovery) return;
       if (ev === 'SIGNED_IN' && !state.user) { await setUser(session); document.body.innerHTML = ''; route(); }
       if (ev === 'SIGNED_OUT') { state.user = null; route(); }
     });
