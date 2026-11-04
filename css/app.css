@@ -166,3 +166,31 @@ form.inline { display: flex; gap: .4rem; flex-wrap: wrap; margin-top: .6rem; } f
 .sheet-lbl { font-size: .8rem; color: var(--muted); margin: 1rem 0 .3rem; }
 .mp-sheet .cell { position: relative; }
 .mp-sheet .cell .buang { position: absolute; top: 1mm; right: 1mm; padding: .1rem .45rem; line-height: 1.2; }
+/* hazard */
+.badge.rk-rendah { background: #dcf3e5; color: #08602f; } .badge.rk-sedang { background: #fff3c4; color: #6b4e00; }
+.badge.rk-tinggi { background: #ffd8b0; color: #7a3300; } .badge.rk-ekstrem { background: #d92d20; color: #fff; }
+.badge.hz-baru { background: #e0ecfb; color: #0C4F8F; } .badge.hz-diverifikasi { background: #fff3c4; color: #6b4e00; } .badge.hz-dikerjakan { background: #ffe6cc; color: #7a3300; }
+.badge.hz-menunggu_verifikasi { background: #ede4ff; color: #4a2a8a; } .badge.hz-closed { background: #dcf3e5; color: #08602f; } .badge.hz-ditolak { background: #eef0f3; color: #667085; }
+.hz-badges { display: flex; flex-wrap: wrap; gap: .3rem; align-items: flex-start; }
+.clamp2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.gps-box { padding: .6rem .75rem; border-radius: 8px; margin: .3rem 0 .6rem; font-size: .9rem; border: 1px solid; }
+.gps-box.ok { background: #e3f5ea; border-color: #b8e2c7; color: #08602f; } .gps-box.wait { background: #fff7e0; border-color: #f3dc94; color: #6b4e00; }
+.foto-grid { display: flex; flex-wrap: wrap; gap: .4rem; margin: .4rem 0; }
+.fthumb { position: relative; width: 96px; height: 96px; border-radius: 8px; overflow: hidden; background: #eee; display: block; flex: none; }
+.fthumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.fthumb button { position: absolute; top: 3px; right: 3px; border: 0; background: rgba(0,0,0,.6); color: #fff; border-radius: 50%; width: 24px; height: 24px; cursor: pointer; }
+.cam-modal .modal-box { max-width: 640px; padding: .6rem; background: #111; color: #fff; }
+.cam-view video { width: 100%; max-height: 70vh; border-radius: 8px; background: #000; display: block; }
+.cam-info { margin: .4rem 0; color: #ddd; }
+.timeline { list-style: none; padding: 0; margin: 0; border-left: 2px solid var(--line); }
+.timeline li { padding: 0 0 .7rem .8rem; position: relative; font-size: .9rem; }
+.timeline li::before { content: ""; position: absolute; left: -6px; top: .3rem; width: 10px; height: 10px; border-radius: 50%; background: var(--blue); }
+.papan summary { cursor: pointer; } .papan .tbl { margin-top: .6rem; }
+.bar { height: 8px; background: #eceff3; border-radius: 4px; overflow: hidden; min-width: 60px; } .bar i { display: block; height: 100%; background: var(--green, #0A8442); }
+.koreksi { margin-top: .8rem; } .area-box.nonaktif { opacity: .6; }
+.chips { display: flex; flex-wrap: wrap; gap: .3rem; margin: .3rem 0 .5rem; }
+.chip button { border: 0; background: none; cursor: pointer; color: #b42318; font-weight: 700; }
+.bell { position: relative; } .bell i { position: absolute; top: -4px; right: -4px; background: #d92d20; color: #fff; font-style: normal; font-size: .65rem; border-radius: 9px; padding: 0 5px; line-height: 1.4; }
+.bell i:empty { display: none; }
+.nlist { display: flex; flex-direction: column; } .nlist a { display: flex; flex-direction: column; gap: 2px; padding: .6rem .4rem; border-bottom: 1px solid var(--line); text-decoration: none; color: inherit; }
+.nlist a.baru { background: #eef4fb; } .nlist a small { font-size: .8rem; }

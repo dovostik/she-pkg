@@ -88,16 +88,36 @@
   }
   addEventListener('online', () => { tandaSinyal(); if (window.Scan?.syncOffline) Scan.syncOffline(); });
   addEventListener('offline', tandaSinyal);
+  /* ---------- notifikasi ---------- */
+  async function hitungNotif() {
+    if (!navigator.onLine || !state.user) return;
+    const { count } = await sb.from('notif').select('id', { count: 'exact', head: true }).is('dibaca_at', null);
+    const b = $('#nbadge'); if (b) b.textContent = count ? (count > 99 ? '99+' : count) : '';
+  }
+  setInterval(hitungNotif, 60000);
+  const keHash = h => '#' + (h || '/').replace(/^\/kimper\/pengajuan\//, '/pengajuan/').replace(/^\/kimper\//, '/mp/');
+  async function bukaNotif() {
+    const m = modal('<div class="modal-head"><b>Notifikasi</b><span><button class="btn sm ghost" id="semuabaca">Tandai semua dibaca</button> <button class="icon-btn" data-x aria-label="Tutup">✕</button></span></div><div id="nlist" class="loading">Memuat…</div>');
+    try {
+      const r = await q(sb.from('notif').select('id,judul,isi,href,at,dibaca_at').order('at', { ascending: false }).limit(40));
+      const L = $('#nlist', m); L.className = '';
+      L.innerHTML = r.length ? '<div class="nlist">' + r.map(n => '<a href="' + esc(keHash(n.href)) + '" data-n="' + n.id + '" class="' + (n.dibaca_at ? '' : 'baru') + '"><b>' + esc(n.judul) + '</b>' + (n.isi ? '<small>' + esc(n.isi) + '</small>' : '') + '<small class="muted">' + tgl(n.at) + ' ' + jam(n.at) + '</small></a>').join('') + '</div>' : '<div class="empty">Belum ada notifikasi.</div>';
+      $$('[data-n]', L).forEach(a => a.onclick = () => { sb.from('notif').update({ dibaca_at: new Date().toISOString() }).eq('id', a.dataset.n).then(hitungNotif); m.remove(); });
+      $('#semuabaca', m).onclick = async () => { await sb.from('notif').update({ dibaca_at: new Date().toISOString() }).is('dibaca_at', null); hitungNotif(); m.remove(); };
+    } catch (e) { $('#nlist', m).innerHTML = '<div class="empty">' + esc(!navigator.onLine ? 'Butuh sinyal untuk memuat notifikasi.' : errMsg(e)) + '</div>'; }
+  }
   function shell() {
     const nav = [['mp', 'Mine Permit'], ['pengajuan', 'Pengajuan']];
     if (canScan()) nav.push(['scan', 'Scan']);
     nav.push(['pelanggaran', 'Pelanggaran']);
+    nav.splice(0, 0, ['hazard', 'Hazard']);
     if (canApprove()) nav.push(['akun', 'Akun']);
     document.body.innerHTML =
       '<header class="top no-print"><a class="brand" href="#/mp">' + LOGO + '<span><b>SHE PKG</b><small>PT Hamparan Mulya</small></span></a>' +
       '<nav>' + nav.map(([h, t]) => '<a href="#/' + h + '" data-nav="' + h + '">' + t + '</a>').join('') + '</nav>' +
-      '<div class="me"><span>' + esc(state.profile?.nama || state.user?.email) + '<small>' + esc(ROLE[role()] || 'Belum punya peran') + '</small></span><button class="btn sm ghost" id="sandi" title="Ganti kata sandi">Sandi</button><button class="btn sm ghost" id="keluar">Keluar</button></div></header>' +
+      '<div class="me"><button class="btn sm ghost bell" id="bell" title="Notifikasi" aria-label="Notifikasi">🔔<i id="nbadge"></i></button><span>' + esc(state.profile?.nama || state.user?.email) + '<small>' + esc(ROLE[role()] || 'Belum punya peran') + '</small></span><button class="btn sm ghost" id="sandi" title="Ganti kata sandi">Sandi</button><button class="btn sm ghost" id="keluar">Keluar</button></div></header>' +
       '<main id="view"></main>';
+    $('#bell').onclick = bukaNotif; hitungNotif();
     $('#keluar').onclick = async () => { await sb.auth.signOut(); location.hash = ''; location.reload(); };
     $('#sandi').onclick = () => {
       const m = modal('<div class="modal-head"><b>Ganti kata sandi</b><button class="icon-btn" data-x aria-label="Tutup">✕</button></div>' +
@@ -130,6 +150,7 @@
       if (parts[0] === 'cetak') return await viewCetak(v, params);
       if (parts[0] === 'scan') return await Scan.view(v);
       if (parts[0] === 'pelanggaran') return await viewPelanggaran(v, params);
+      if (parts[0] === 'hazard') return await Hazard.view(v, parts, params);
       if (parts[0] === 'akun' && canApprove()) return await viewAkun(v, params);
       v.innerHTML = '<p>Halaman tidak ditemukan.</p>';
     } catch (e) { console.error(e);
@@ -683,7 +704,7 @@
       try { await loadRef(); } catch (e) { console.error(e); }
     } else state.profile = null;
   }
-  window.App = { sb, esc, toast, canAjukan, isPic, fotoUrl, fotoUrls, clearFotoCache, state, q, errMsg, tgl, jam, isShe, canScan, modal, busy, statusBadge, route };
+  window.App = { sb, esc, toast, canAjukan, isPic, canApprove, role, fotoUrl, fotoUrls, clearFotoCache, state, q, errMsg, tgl, jam, isShe, canScan, modal, busy, statusBadge, route };
   (async () => {
     state.recovery = new URLSearchParams(location.search).has('reset');
     const { data } = await sb.auth.getSession(); await setUser(data.session);
