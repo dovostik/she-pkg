@@ -199,3 +199,9 @@ form.inline { display: flex; gap: .4rem; flex-wrap: wrap; margin-top: .6rem; } f
 .cekbox { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: .25rem .8rem; font-size: .88rem; }
 .cekbox label { display: flex; gap: .4rem; align-items: center; }
 .pic-tag { color: #0C4F8F; font-weight: 600; }
+.pub-btn { margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--line); text-align: center; display: flex; flex-direction: column; gap: .3rem; }
+.warn-btn { background: #f79009; border-color: #f79009; color: #fff; font-weight: 700; }
+.publik { min-height: 100vh; background: var(--bg, #f4f6f9); }
+.pub-head { background: #0C4F8F; color: #fff; padding: .8rem 1rem; position: sticky; top: 0; z-index: 5; }
+.pub-main { max-width: 640px; margin: 0 auto; padding: 1rem; }
+pre.wrap { white-space: pre-wrap; word-break: break-all; }

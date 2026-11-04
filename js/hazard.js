@@ -111,6 +111,99 @@
   }
   addEventListener('online', kirimAntrian);
 
+  /* ---------- identitas perangkat (pengganti nomor serial yang tidak bisa dibaca browser) ---------- */
+  const KEY_DEV = 'hz_perangkat', KEY_QP = 'hz_antrian_publik', KEY_ID = 'hz_identitas';
+  function idbGet() { return new Promise(r => { try { const o = indexedDB.open('she_pkg', 1); o.onupgradeneeded = () => o.result.createObjectStore('kv');
+    o.onsuccess = () => { try { const g = o.result.transaction('kv').objectStore('kv').get(KEY_DEV); g.onsuccess = () => r(g.result || null); g.onerror = () => r(null); } catch (e) { r(null); } }; o.onerror = () => r(null); } catch (e) { r(null); } }); }
+  function idbSet(v) { try { const o = indexedDB.open('she_pkg', 1); o.onupgradeneeded = () => o.result.createObjectStore('kv'); o.onsuccess = () => { try { o.result.transaction('kv', 'readwrite').objectStore('kv').put(v, KEY_DEV); } catch (e) { } }; } catch (e) { } }
+  async function idPerangkat() {
+    const dariCookie = (document.cookie.match(/(?:^|; )hzdev=([A-Za-z0-9-]+)/) || [])[1];
+    let id = ls.get(KEY_DEV, null) || await idbGet() || dariCookie;
+    if (!id || !/^[A-Za-z0-9-]{16,64}$/.test(id)) id = crypto.randomUUID ? crypto.randomUUID() : 'd' + Date.now().toString(36) + Math.random().toString(36).slice(2, 14);
+    ls.set(KEY_DEV, id); idbSet(id); document.cookie = 'hzdev=' + id + '; max-age=315360000; path=/; SameSite=Lax';
+    return id;
+  }
+  async function infoPerangkat() {
+    const n = navigator, i = { ua: n.userAgent, bahasa: n.language, zona: Intl.DateTimeFormat().resolvedOptions().timeZone, layar: screen.width + 'x' + screen.height + '@' + (window.devicePixelRatio || 1),
+      cpu: n.hardwareConcurrency || null, ram_gb: n.deviceMemory || null, sentuh: n.maxTouchPoints || 0, platform: n.platform || null };
+    try { if (n.userAgentData?.getHighEntropyValues) { const h = await n.userAgentData.getHighEntropyValues(['model', 'platform', 'platformVersion', 'brands']);
+      i.model = h.model || null; i.os = (h.platform || '') + ' ' + (h.platformVersion || ''); i.browser = (h.brands || []).map(b => b.brand + ' ' + b.version).join(', '); } } catch (e) { }
+    if (!i.model) { const m = n.userAgent.match(/Android [\d.]+; ([^;)]+)/); if (m) i.model = m[1].trim(); else if (/iPhone|iPad/.test(n.userAgent)) i.model = /iPad/.test(n.userAgent) ? 'iPad' : 'iPhone'; }
+    return i;
+  }
+
+  async function kirimPublik(it) {
+    const foto = [];
+    for (let i = 0; i < it.foto.length; i++) {
+      const f = it.foto[i]; const blob = f.blob || await (await fetch(f.dataUrl)).blob(); const path = 'publik/' + it.dev + '/' + it.row.client_id + '-' + i + '.jpg';
+      const { error } = await A().sb.storage.from('hazard').upload(path, blob, { contentType: 'image/jpeg' });
+      if (error && !/exists|duplicate/i.test(error.message)) throw error;
+      foto.push({ path, at: f.at, lat: f.lat, lon: f.lon, akurasi: f.akurasi });
+    }
+    return await A().q(A().sb.rpc('lapor_hazard_publik', { p: { ...it.row, foto, perangkat_id: it.dev, perangkat: it.info, offline: !!it.offline, tgl_temuan: it.at } }));
+  }
+  let kirimPubJalan = false;
+  async function kirimAntrianPublik() {
+    if (kirimPubJalan || !navigator.onLine) return; const qd = ls.get(KEY_QP, []); if (!qd.length) return;
+    kirimPubJalan = true; const sisa = []; let n = 0;
+    for (const it of qd) { try { await kirimPublik(it); n++; } catch (e) { it.gagal = A().errMsg(e); if (!/diblokir|tidak valid/i.test(it.gagal)) sisa.push(it); } }
+    ls.set(KEY_QP, sisa); kirimPubJalan = false; if (n) A().toast(n + ' laporan hazard dari HP ini terkirim');
+  }
+  addEventListener('online', kirimAntrianPublik);
+
+  async function viewPublik() {
+    const dev = await idPerangkat(); const info = await infoPerangkat(); kirimAntrianPublik();
+    let areas = []; try { areas = await A().q(A().sb.from('area').select('id,nama,urut').eq('aktif', true).order('urut', { nullsFirst: false }).order('nama')); ls.set(KEY_AREA, areas); } catch (e) { areas = ls.get(KEY_AREA, []); }
+    const idt = ls.get(KEY_ID, {}); let g = null, gErr = null; const foto = [];
+    document.body.innerHTML = '<div class="publik"><header class="pub-head">' + '<b>SHE PKG</b> · Lapor hazard</header><main class="pub-main">' +
+      '<p class="small muted">Untuk karyawan & kontraktor tanpa akun. Laporan langsung masuk ke tim SHE PT Hamparan Mulya.</p>' +
+      '<form id="fpub" class="form">' +
+      '<fieldset><legend>Identitas pelapor</legend><label class="lbl">Nama lengkap<input name="nama" required minlength="3" autocomplete="name" value="' + esc(idt.nama || '') + '"></label>' +
+        '<label class="lbl">Jabatan<input name="jabatan" required value="' + esc(idt.jabatan || '') + '" placeholder="mis. Operator DT, Helper"></label>' +
+        '<label class="lbl">Perusahaan<input name="perusahaan" required list="dlpp" value="' + esc(idt.perusahaan || '') + '"></label><datalist id="dlpp"><option>PT Hamparan Mulya</option><option>PT ABA</option><option>PT CSMU</option><option>PT BAT</option></datalist></fieldset>' +
+      '<fieldset><legend>Lokasi temuan (terkunci otomatis)</legend><div id="gps"></div><label class="lbl">Area / PIC area<select name="area" required><option value="">— pilih —</option>' +
+        areas.map(a => '<option value="' + a.id + '">' + esc(a.nama) + '</option>').join('') + '</select></label><label class="lbl">Detail lokasi<input name="lokasi" placeholder="mis. KM 12 hauling"></label></fieldset>' +
+      '<fieldset><legend>Temuan</legend><div class="seg"><label><input type="radio" name="kat" value="KTA" checked><span>Kondisi tidak aman</span></label><label><input type="radio" name="kat" value="TTA"><span>Tindakan tidak aman</span></label></div>' +
+        '<label class="lbl">Jenis bahaya<input name="jenis" list="dljenis" required></label><datalist id="dljenis">' + JENIS.map(j => '<option>' + j + '</option>').join('') + '</datalist>' +
+        '<label class="lbl">Uraian temuan<textarea name="desk" rows="3" required minlength="5"></textarea></label><label class="lbl">Tindakan langsung <small class="muted">(bila ada)</small><input name="langsung"></label></fieldset>' +
+      '<fieldset><legend>Foto temuan (kamera langsung, maks 4)</legend><div class="foto-grid" id="fgrid"></div><button type="button" class="btn" id="ambil">📷 Ambil foto</button></fieldset>' +
+      '<div class="note small">Untuk mencegah laporan palsu / atas nama orang lain, laporan ini menyimpan <b>identitas perangkat</b> (ID perangkat, model HP' + (info.model ? ': ' + esc(info.model) : '') + ', alamat IP), lokasi GPS dan waktu. Data ini hanya bisa dilihat tim SHE.</div>' +
+      '<div class="actions"><button class="btn primary" id="kirim">Kirim laporan</button><a class="btn ghost" href="./">Batal</a></div></form></main></div>';
+    const f = $('#fpub');
+    const henti = pantauGPS((x, e) => { g = x; gErr = e; const el = $('#gps'); if (el) el.innerHTML = gpsHTML(g, gErr); else henti(); });
+    const gambar = () => { $('#fgrid').innerHTML = foto.map((x, i) => '<span class="fthumb"><img src="' + x.url + '" alt=""><button type="button" data-hapus="' + i + '">✕</button></span>').join('');
+      $$('[data-hapus]').forEach(b => b.onclick = () => { foto.splice(+b.dataset.hapus, 1); gambar(); }); $('#ambil').style.display = foto.length >= 4 ? 'none' : ''; };
+    $('#ambil').onclick = async () => {
+      if (!g) return A().toast('Tunggu lokasi GPS dulu', 'err');
+      if (f.nama.value.trim().length < 3) return A().toast('Isi nama lengkap dulu', 'err');
+      const nmArea = f.area.value ? f.area.selectedOptions[0].text : 'Area belum dipilih', at = new Date(), gg = { ...g };
+      const blob = await kamera(() => ['HAZARD · ' + nmArea, waktu(at), 'GPS ' + gg.lat.toFixed(6) + ', ' + gg.lon.toFixed(6) + ' ±' + gg.akurasi + ' m', 'Pelapor: ' + f.nama.value.trim() + ' (' + f.perusahaan.value.trim() + ') · ' + dev.slice(0, 8)]);
+      if (blob) { foto.push({ blob, url: URL.createObjectURL(blob), at: at.toISOString(), lat: gg.lat, lon: gg.lon, akurasi: gg.akurasi }); gambar(); }
+    };
+    f.onsubmit = async e => {
+      e.preventDefault(); const b = $('#kirim');
+      if (!g) return A().toast('Lokasi GPS belum didapat', 'err');
+      if (g.akurasi > akMax()) return A().toast('GPS belum akurat (±' + g.akurasi + ' m). Tunggu sampai ±' + akMax() + ' m', 'err');
+      if (!foto.length) return A().toast('Ambil minimal 1 foto temuan', 'err');
+      ls.set(KEY_ID, { nama: f.nama.value.trim(), jabatan: f.jabatan.value.trim(), perusahaan: f.perusahaan.value.trim() });
+      const it = { dev, info, at: new Date().toISOString(), foto, row: { client_id: (crypto.randomUUID ? crypto.randomUUID() : dev + '-' + Date.now()), nama: f.nama.value.trim(), jabatan: f.jabatan.value.trim(), perusahaan: f.perusahaan.value.trim(),
+        area_id: +f.area.value, lokasi_detail: f.lokasi.value.trim(), kategori: f.kat.value, jenis_bahaya: f.jenis.value.trim(), deskripsi: f.desk.value.trim(), tindakan_langsung: f.langsung.value.trim(), lat: g.lat, lon: g.lon, gps_akurasi: g.akurasi } };
+      A().busy(b, true, 'Mengirim…');
+      const selesai = msg => { document.querySelector('.pub-main').innerHTML = '<div class="note ok">' + msg + '</div><div class="actions"><a class="btn primary" href="./?lapor=1">Lapor lagi</a><a class="btn ghost" href="./">Ke halaman masuk</a></div>'; };
+      const simpanHP = async () => { const fd = []; for (const x of foto) fd.push({ dataUrl: await keDataURL(x.blob), at: x.at, lat: x.lat, lon: x.lon, akurasi: x.akurasi });
+        const qd = ls.get(KEY_QP, []); qd.push({ ...it, foto: fd, offline: true }); if (!ls.set(KEY_QP, qd)) throw new Error('Memori HP penuh');
+        henti(); selesai('Tanpa sinyal — laporan disimpan di HP ini dan terkirim otomatis saat ada sinyal (buka halaman ini lagi).'); };
+      try {
+        if (!navigator.onLine) return await simpanHP();
+        const nmr = await kirimPublik(it); henti();
+        selesai('<b>Laporan ' + esc(nmr) + ' terkirim.</b><br>Terima kasih — tim SHE akan memverifikasi dan meneruskan ke PIC area. Catat nomor laporan ini.');
+      } catch (er) {
+        if (/fetch|network|load failed/i.test(A().errMsg(er))) { try { await simpanHP(); } catch (e2) { A().toast(A().errMsg(e2), 'err'); A().busy(b, false); } }
+        else { A().toast(A().errMsg(er), 'err'); A().busy(b, false); }
+      }
+    };
+  }
+
   /* ---------- router ---------- */
   async function view(v, parts, params) {
     if (parts[1] === 'baru') return viewBaru(v);
@@ -131,7 +224,7 @@
       '<div id="hzsum"></div><div id="hzlist" class="loading">Memuat…</div>';
     $('#fhz').area.onchange = e => location.hash = '#/hazard?t=' + tab + (e.target.value ? '&area=' + e.target.value : '');
     tampilAntrian(); kirimAntrian();
-    let qy = A().sb.from('v_hazard').select('id,nomor,tgl_temuan,status,kategori,jenis_bahaya,deskripsi,risiko,due_date,area,area_id,pelapor_nama,foto,terlambat,saya_pic,dibuat_oleh,pic_nama').order('tgl_temuan', { ascending: false }).limit(300);
+    let qy = A().sb.from('v_hazard').select('id,nomor,tgl_temuan,status,kategori,jenis_bahaya,deskripsi,risiko,due_date,area,area_id,pelapor_nama,foto,terlambat,saya_pic,dibuat_oleh,pic_nama,sumber').order('tgl_temuan', { ascending: false }).limit(300);
     if (ar) qy = qy.eq('area_id', ar);
     if (tab === 'saya' || tab === 'proses') qy = qy.not('status', 'in', '(closed,ditolak)');
     if (tab === 'selesai') qy = qy.eq('status', 'closed');
@@ -142,7 +235,7 @@
     if (!data.length) { L.innerHTML = '<div class="empty">' + (tab === 'saya' ? 'Tidak ada hazard yang perlu tindakan Anda.' : 'Belum ada laporan.') + '</div>'; return; }
     const urls = await A().fotoUrls(data.map(h => h.foto?.[0]?.path).filter(Boolean), 'hazard');
     L.innerHTML = '<div class="mp-list">' + data.map(h => '<a class="mp-row mp-link hz-row" href="#/hazard/' + h.id + '"><span class="thumb">' + (urls[h.foto?.[0]?.path] ? '<img loading="lazy" src="' + esc(urls[h.foto[0].path]) + '" alt="">' : '') + '</span>' +
-      '<span class="mp-main"><b>' + esc(h.area) + ' — ' + esc(h.jenis_bahaya || KAT[h.kategori] || '') + '</b><small class="clamp2">' + esc(h.deskripsi) + '</small><small class="muted">' + esc(h.nomor) + ' · ' + A().tgl(h.tgl_temuan) + ' ' + A().jam(h.tgl_temuan) + ' · ' + esc(h.pelapor_nama || '') + '</small></span>' +
+      '<span class="mp-main"><b>' + esc(h.area) + ' — ' + esc(h.jenis_bahaya || KAT[h.kategori] || '') + '</b><small class="clamp2">' + esc(h.deskripsi) + '</small><small class="muted">' + esc(h.nomor) + ' · ' + A().tgl(h.tgl_temuan) + ' ' + A().jam(h.tgl_temuan) + ' · ' + esc(h.pelapor_nama || '') + (h.sumber === 'publik' ? ' (tanpa akun)' : '') + '</small></span>' +
       '<span class="mp-side">' + stBadge(h.status) + riskBadge(h.risiko) + (h.due_date && !['closed', 'ditolak'].includes(h.status) ? '<small class="' + (h.terlambat ? 'err' : 'muted') + '">' + (h.terlambat ? 'TERLAMBAT · ' : 'batas ') + A().tgl(h.due_date) + '</small>' : '') + '</span></a>').join('') + '</div>';
   }
   async function papan(ar) {
@@ -235,7 +328,7 @@
         '<div class="box"><h3>Temuan</h3>' + fotoHTML(h.foto) + '<p>' + esc(h.deskripsi) + '</p><dl>' +
           (h.tindakan_langsung ? '<dt>Tindakan langsung</dt><dd>' + esc(h.tindakan_langsung) + '</dd>' : '') +
           '<dt>Waktu</dt><dd>' + waktu(new Date(h.tgl_temuan)) + (h.dilapor_offline ? ' <small class="muted">(dicatat tanpa sinyal)</small>' : '') + '</dd>' +
-          '<dt>Pelapor</dt><dd>' + esc(h.pelapor_nama || '-') + '</dd>' +
+          '<dt>Pelapor</dt><dd>' + esc(h.pelapor_nama || '-') + (h.sumber === 'publik' ? ' <span class="badge">tanpa akun</span><br><small>' + esc([h.pelapor_jabatan, h.pelapor_perusahaan].filter(Boolean).join(' · ')) + '</small>' : '') + '</dd>' +
           '<dt>Area</dt><dd>' + esc(h.area) + (h.lokasi_detail ? ' · ' + esc(h.lokasi_detail) : '') + '</dd>' +
           '<dt>Lokasi GPS 🔒</dt><dd>' + (h.lat ? '<a href="' + peta(h.lat, h.lon) + '" target="_blank" rel="noopener">' + h.lat.toFixed(6) + ', ' + h.lon.toFixed(6) + '</a> ±' + Math.round(h.gps_akurasi) + ' m' : '-') + '</dd></dl></div>' +
         (h.foto_perbaikan?.length || h.tindakan_perbaikan ? '<div class="box"><h3>Bukti perbaikan</h3>' + fotoHTML(h.foto_perbaikan) + '<p>' + esc(h.tindakan_perbaikan || '') + '</p><dl>' +
@@ -245,12 +338,31 @@
         '<div class="box"><h3>Penanganan</h3><dl><dt>PIC area</dt><dd>' + esc(h.pic_nama || 'Belum ditunjuk') + '</dd>' +
           '<dt>Risiko</dt><dd>' + (h.risiko ? riskBadge(h.risiko) + ' <small class="muted">K' + h.kemungkinan + ' × P' + h.keparahan + ' = ' + h.kemungkinan * h.keparahan + '</small>' : '<span class="muted">belum dinilai SHE</span>') + '</dd>' +
           '<dt>Batas waktu</dt><dd>' + (h.due_date ? '<span class="' + (h.terlambat ? 'err' : '') + '">' + A().tgl(h.due_date) + (h.terlambat ? ' — terlambat' : '') + '</span>' : '-') + '</dd></dl></div>' +
-        '<div class="box" id="aksi"></div>' +
+        '<div class="box" id="aksi"></div>' + (h.sumber === 'publik' && isShe() ? '<div class="box" id="perangkat"><h3>Perangkat pelapor</h3><p class="muted small">Memuat…</p></div>' : '') +
         '<div class="box"><h3>Riwayat</h3><ol class="timeline">' + log.map(l => '<li><small class="muted">' + waktu(new Date(l.at)) + '</small><br>' + esc(l.catatan || (ST[l.ke] || l.ke)) +
           (l.data?.foto_perbaikan?.length ? '<details><summary class="small">Bukti yang dikembalikan</summary>' + fotoHTML(l.data.foto_perbaikan) + '</details>' : '') +
           (l.data?.area_lama ? '<br><small class="muted">Area: ' + esc(l.data.area_lama) + ' → ' + esc(l.data.area_baru) + (l.data.lokasi_baru !== l.data.lokasi_lama ? ' · lokasi: ' + esc(l.data.lokasi_lama || '-') + ' → ' + esc(l.data.lokasi_baru || '-') : '') + '</small>' : '') + '</li>').join('') + '</ol></div>' +
       '</section></div>';
     aksi(h, final);
+    if ($('#perangkat')) perangkatBox(h);
+  }
+  async function perangkatBox(h) {
+    const el = $('#perangkat'); let d;
+    try { d = await A().q(A().sb.rpc('info_perangkat_hazard', { p_hazard: h.id })); } catch (e) { el.innerHTML = '<h3>Perangkat pelapor</h3><p class="err small">' + esc(A().errMsg(e)) + '</p>'; return; }
+    if (!d) { el.innerHTML = '<h3>Perangkat pelapor</h3><p class="muted small">Tidak ada data perangkat.</p>'; return; }
+    const i = d.info || {}, nama = (d.nama_lain || []).filter(Boolean);
+    el.innerHTML = '<h3>Perangkat pelapor ' + (d.diblokir ? '<span class="badge st-dicabut">DIBLOKIR</span>' : '') + '</h3><dl>' +
+      '<dt>ID perangkat</dt><dd><code>' + esc(d.perangkat_id) + '</code></dd>' +
+      '<dt>HP</dt><dd>' + esc([i.model, i.os || i.platform].filter(Boolean).join(' · ') || '-') + '<br><small class="muted">' + esc(i.browser || '') + ' · layar ' + esc(i.layar || '-') + ' · ' + esc(i.zona || '') + '</small></dd>' +
+      '<dt>Alamat IP</dt><dd>' + esc(d.ip || '-') + (d.laporan_ip > 1 ? ' <small class="muted">(' + d.laporan_ip + ' laporan dari IP ini)</small>' : '') + '</dd>' +
+      '<dt>Riwayat perangkat</dt><dd>' + d.laporan_perangkat + ' laporan' + (d.ditolak_perangkat ? ', <span class="err">' + d.ditolak_perangkat + ' ditolak</span>' : '') + '</dd>' +
+      '<dt>Nama yang dipakai</dt><dd class="' + (nama.length > 1 ? 'err' : '') + '">' + esc(nama.join(', ') || '-') + (nama.length > 1 ? '<br><small>Perangkat ini melapor dengan lebih dari satu nama</small>' : '') + '</dd></dl>' +
+      '<details><summary class="small">Detail teknis</summary><pre class="small wrap">' + esc(d.user_agent || i.ua || '') + '</pre></details>' +
+      '<div class="actions">' + (d.diblokir ? '<button class="btn sm" id="bukablok">Buka blokir perangkat</button>' : '<button class="btn sm danger" id="blok">Blokir perangkat ini</button>') + '</div>';
+    const run = async (blokir, btn) => { const a = blokir ? prompt('Alasan memblokir perangkat ini (mis. laporan palsu, memakai nama orang lain):') : 'buka'; if (!a) return;
+      A().busy(btn, true); try { await A().q(A().sb.rpc('blokir_perangkat', { p_hazard: h.id, p_alasan: a, p_blokir: blokir })); A().toast(blokir ? 'Perangkat diblokir' : 'Blokir dibuka'); A().route(); } catch (e) { A().toast(A().errMsg(e), 'err'); A().busy(btn, false); } };
+    if ($('#blok')) $('#blok').onclick = e => run(true, e.target);
+    if ($('#bukablok')) $('#bukablok').onclick = e => run(false, e.target);
   }
 
   function aksi(h, final) {
@@ -357,5 +469,5 @@
       try { await q(sb.from('area').insert({ nama: f.nama.value.trim(), kode: f.kode.value.trim().toUpperCase(), jenis: f.jenis.value, aktif: true, urut: 100 })); A().toast('Area ditambahkan'); A().route(); } catch (er) { A().toast(A().errMsg(er), 'err'); } };
   }
 
-  window.Hazard = { view, kirimAntrian };
+  window.Hazard = { view, kirimAntrian, viewPublik, kirimAntrianPublik };
 })();

@@ -163,11 +163,14 @@
   const loginWrap = inner => '<div class="login"><div class="login-box">' + LOGO.replace('class="logo"', 'class="logo big"') +
     '<h1>SHE PKG</h1><p class="muted">Sistem Mine Permit, SHE &amp; gudang — PT Hamparan Mulya, Site Muara Teweh</p>' + inner + '</div></div>';
   function viewLogin(pesan) {
+    if (new URLSearchParams(location.search).has('lapor') && window.Hazard) return Hazard.viewPublik();
+    if (window.Hazard) Hazard.kirimAntrianPublik();
     document.body.innerHTML = loginWrap((pesan ? '<div class="note warn">' + esc(pesan) + '</div>' : '') + '<form id="flogin">' +
       '<label class="lbl">Email<input type="email" name="email" required autocomplete="username"></label>' +
       '<label class="lbl">Kata sandi<input type="password" name="pw" required autocomplete="current-password"></label>' +
       '<button class="btn primary block">Masuk</button><div class="login-err err"></div></form>' +
       '<p class="small center"><a href="#" id="kelupa">Lupa kata sandi?</a></p>' +
+      '<div class="pub-btn"><a class="btn warn-btn block" href="?lapor=1">⚠ Lapor hazard tanpa akun</a><small class="muted">Cukup nama, jabatan & perusahaan</small></div>' +
       '<p class="small center">Belum punya akun? <a href="#" id="kedaftar">Daftar di sini</a></p>');
     $('#kedaftar').onclick = e => { e.preventDefault(); viewDaftar(); };
     $('#kelupa').onclick = e => { e.preventDefault(); viewLupa($('#flogin').email.value.trim()); };
@@ -636,7 +639,7 @@
           '<label class="lbl">Jabatan / posisi<input name="jabatan" value="' + esc(a.jabatan || '') + '"></label>' +
           '<label class="lbl">Hubungkan ke data karyawan <small class="muted">(opsional)</small><input name="kcari" placeholder="Ketik NIK / nama" value="' + esc(a.karyawan?.nama || a.nik || '') + '" autocomplete="off"><input type="hidden" name="kid"></label></div>' +
           '<div class="suggest ksug"></div>' +
-          '<fieldset class="pic-area"><legend>PIC area hazard <small class="muted">(opsional — temuan di area ini otomatis ke akun ini)</small></legend><div class="cekbox">' +
+          '<fieldset class="pic-area"><legend>PIC area hazard <small class="muted">(opsional, maks 2 area — temuan di area ini otomatis ke akun ini)</small></legend><div class="cekbox">' +
             areas.map(x => '<label><input type="checkbox" name="pa" value="' + x.id + '"' + ((picBy[a.id] || []).includes(x.id) ? ' checked' : '') + '> ' + esc(x.nama) + '</label>').join('') + '</div></fieldset>' +
           '<div class="actions"><button class="btn primary sm" name="ok">' + (a.status === 'aktif' ? 'Simpan perubahan' : 'Setujui akun') + '</button>' +
           (a.status === 'menunggu' ? '<button type="button" class="btn danger sm" data-tolak>Tolak</button>' : a.status === 'aktif' ? '<button type="button" class="btn sm" data-reset>Reset sandi</button><button type="button" class="btn danger sm" data-nonaktif>Nonaktifkan</button>' : '') + '</div></form>') + '</div>';
@@ -651,6 +654,8 @@
         else if (r === 'spv') f.jabatan.value = 'SPV SHE'; };
       f.role.onchange = () => { $('.per-pic', f).hidden = f.role.value !== 'pic_kontraktor'; isiJab(); };
       f.per.onchange = isiJab;
+      const batasPA = () => { const c = $$('input[name=pa]', f), n = c.filter(x => x.checked).length; c.forEach(x => x.disabled = !x.checked && n >= 2); };
+      $$('input[name=pa]', f).forEach(x => x.onchange = batasPA); batasPA();
       // tebak perusahaan dari isian pendaftar
       if (!f.per.value) { const a0 = data.find(x => x.id === id), tx = (a0?.perusahaan_teks || '').toUpperCase();
         const g = state.perusahaan.find(x => x.kode && x.kode !== 'HM' && new RegExp('\\b' + x.kode + '\\b').test(tx)); if (g) f.per.value = g.id; }
