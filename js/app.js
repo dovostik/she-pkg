@@ -751,6 +751,8 @@
       if (error && simpan && simpan.id === state.user.id) state.profile = simpan; // tanpa sinyal: pakai profil terakhir
       else { state.profile = data; if (data) simpanLokal('she_profil', data); }
       try { await loadRef(); } catch (e) { console.error(e); }
+      // PIC SHE kontraktor hanya melihat perusahaannya sendiri di semua pilihan perusahaan
+      if (state.profile?.role === 'pic_kontraktor' && state.profile.perusahaan_id && state.perusahaan) state.perusahaan = state.perusahaan.filter(x => x.id === state.profile.perusahaan_id);
     } else state.profile = null;
   }
   window.App = { sb, esc, toast, canAjukan, isPic, canApprove, role, fotoUrl, fotoUrls, clearFotoCache, state, q, errMsg, tgl, jam, isShe, canScan, modal, busy, statusBadge, route };
