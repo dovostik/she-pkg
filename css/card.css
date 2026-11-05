@@ -38,6 +38,6 @@
 .mpc .g { background: #92D050; } .mpc .y { background: #FFFF00; } .mpc .r { background: #FF0000; }
 .mpc .dots i.bolong::after { content: ""; position: absolute; inset: .59mm; border-radius: 50%; background: #fff; border: .17mm solid #333; }
 
-/* Lembar A4 landscape, 4 kartu */
-.mp-sheet { width: 297mm; height: 210mm; display: grid; grid-template-columns: 100mm 100mm; grid-template-rows: 80mm 80mm;
-  column-gap: 12mm; row-gap: 12mm; justify-content: center; align-content: center; background: #fff; overflow: hidden; }
+/* Lembar A4 tegak (portrait), 6 kartu: 2 kolom x 3 baris */
+.mp-sheet { width: 210mm; height: 297mm; display: grid; grid-template-columns: 100mm 100mm; grid-template-rows: 80mm 80mm 80mm;
+  column-gap: 0; row-gap: 8mm; justify-content: center; align-content: center; background: #fff; overflow: hidden; }

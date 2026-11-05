@@ -13,6 +13,7 @@
   try { state.pilih = new Set(JSON.parse(localStorage.getItem('mp_pilih') || '[]')); } catch (e) { }
   const simpanPilih = () => { try { localStorage.setItem('mp_pilih', JSON.stringify([...state.pilih])); } catch (e) { } };
 
+  const KARTU_PER_A4 = 6; // kartu 10 x 8 cm → A4 tegak 2 kolom x 3 baris
   const ROLE = { admin: 'Administrator', spv: 'SPV SHE', staff_she: 'Staff SHE HM', pic_kontraktor: 'PIC SHE Kontraktor', gudang: 'Admin Gudang', pengawas: 'Pengawas', pekerja: 'Pekerja', viewer: 'Viewer' };
   const role = () => state.profile?.role || '';
   const isShe = () => ['admin', 'spv', 'staff_she'].includes(role());
@@ -281,7 +282,7 @@
     if (!data.length) { L.innerHTML = '<div class="empty">Tidak ada Mine Permit yang cocok.</div>'; return; }
     L.innerHTML = '<div class="list-head"><span class="muted small">' + count + ' Mine Permit' + (isShe() ? ' · centang untuk dicetak' : '') + '</span>' +
       (isShe() ? '<span class="pick-all"><button type="button" class="btn sm ghost" id="pilihhal">Pilih semua di halaman ini (' + data.length + ')</button>' +
-        (count > data.length ? '<button type="button" class="btn sm ghost" id="pilihsemua">Pilih semua hasil (' + count + ' → ' + Math.ceil(count / 4) + ' lembar)</button>' : '') + '</span>' : '') +
+        (count > data.length ? '<button type="button" class="btn sm ghost" id="pilihsemua">Pilih semua hasil (' + count + ' → ' + Math.ceil(count / KARTU_PER_A4) + ' lembar)</button>' : '') + '</span>' : '') +
       '</div><div class="mp-list">' + data.map(r =>
       '<div class="mp-row">' + (isShe() ? '<input type="checkbox" class="pick" data-id="' + r.id + '"' + (state.pilih.has(r.id) ? ' checked' : '') + ' aria-label="Pilih untuk dicetak">' : '') +
       '<a href="#/mp/' + r.id + '" class="mp-link"><span class="thumb">' + (urls[r.foto_path] ? '<img loading="lazy" src="' + esc(urls[r.foto_path]) + '" alt="">' : '') + '</span>' +
@@ -294,7 +295,7 @@
     $$('.pick', L).forEach(c => c.onchange = () => { c.checked ? state.pilih.add(c.dataset.id) : state.pilih.delete(c.dataset.id); simpanPilih(); renderPilih(); });
     if ($('#pilihhal')) $('#pilihhal').onclick = () => { data.forEach(r => state.pilih.add(r.id)); $$('.pick', L).forEach(c => c.checked = true); simpanPilih(); renderPilih(); };
     if ($('#pilihsemua')) $('#pilihsemua').onclick = async e => {
-      if (count > 400 && !confirm('Pilih ' + count + ' Mine Permit (' + Math.ceil(count / 4) + ' lembar A4)?')) return;
+      if (count > 400 && !confirm('Pilih ' + count + ' Mine Permit (' + Math.ceil(count / KARTU_PER_A4) + ' lembar A4)?')) return;
       busy(e.target, true);
       try { for (let i = 0; i < count; i += 1000) (await q(filterMP(sb.from('v_mine_permit').select('id'), f).range(i, i + 999))).forEach(r => state.pilih.add(r.id));
         $$('.pick', L).forEach(c => c.checked = true); simpanPilih(); renderPilih(); toast(state.pilih.size + ' Mine Permit dipilih'); }
@@ -324,7 +325,7 @@
     const b = $('#pbar'); if (!b || !isShe()) return;
     const n = state.pilih.size;
     const tdk = new URLSearchParams(location.hash.split('?')[1] || '').get('st') === 'tidakaktif';
-    b.innerHTML = n ? '<span><b>' + n + '</b> Mine Permit dipilih' + (tdk ? '' : ' (' + Math.ceil(n / 4) + ' lembar A4)') + '</span>' +
+    b.innerHTML = n ? '<span><b>' + n + '</b> Mine Permit dipilih' + (tdk ? '' : ' (' + Math.ceil(n / KARTU_PER_A4) + ' lembar A4)') + '</span>' +
       (tdk ? '<button class="btn primary sm" id="aktifkanpilih">Aktifkan kembali terpilih</button>' : '<a class="btn primary sm" href="#/cetak">Cetak terpilih</a><button class="btn sm danger" id="nonaktifpilih">Nonaktifkan terpilih</button>') +
       '<button class="btn sm ghost" id="kosong">Kosongkan</button>' : '';
     if (!n) return;
@@ -423,10 +424,10 @@
     rows.sort((a, b) => ids.indexOf(a.id) - ids.indexOf(b.id));
     const urls = await fotoUrls(rows.map(r => r.foto_path));
     const noFoto = rows.filter(r => !urls[r.foto_path]);
-    const sheets = []; for (let i = 0; i < rows.length; i += 4) sheets.push(rows.slice(i, i + 4));
-    v.innerHTML = '<div class="page-head no-print"><div><a href="#/mp" class="back">‹ Mine Permit</a><h1>Cetak Mine Permit</h1><div class="muted">' + rows.length + ' kartu · ' + sheets.length + ' lembar A4 landscape</div></div>' +
+    const sheets = []; for (let i = 0; i < rows.length; i += KARTU_PER_A4) sheets.push(rows.slice(i, i + KARTU_PER_A4));
+    v.innerHTML = '<div class="page-head no-print"><div><a href="#/mp" class="back">‹ Mine Permit</a><h1>Cetak Mine Permit</h1><div class="muted">' + rows.length + ' kartu · ' + sheets.length + ' lembar A4 tegak (portrait)</div></div>' +
       '<div class="actions"><button class="btn primary" id="print">Cetak / simpan PDF</button></div></div>' +
-      '<div class="note no-print">Di jendela cetak pilih <b>kertas A4, orientasi landscape, skala 100% (jangan "Fit to page"), margin: None</b>, dan centang <b>Background graphics</b>. Tiap kartu dicetak 10 × 8 cm, lipat di garis putus-putus → kartu 5 × 8 cm (depan kiri, belakang kanan).</div>' +
+      '<div class="note no-print">Di jendela cetak pilih <b>kertas A4, orientasi tegak (portrait), skala 100% (jangan "Fit to page"), margin: None</b>, dan centang <b>Background graphics</b>. Tiap kartu dicetak 10 × 8 cm, lipat di garis putus-putus → kartu 5 × 8 cm (depan kiri, belakang kanan).</div>' +
       (noFoto.length ? '<div class="note warn no-print">' + noFoto.length + ' kartu belum punya foto: ' + esc(noFoto.map(r => r.nama).join(', ')) + '</div>' : '') +
       '<div class="print-area">' + sheets.map((s, i) => '<div class="sheet-lbl no-print">Lembar ' + (i + 1) + ' dari ' + sheets.length + '</div><div class="mp-sheet">' + s.map(c => '<div class="cell">' + MPCard.renderCard(c, { foto: urls[c.foto_path], ktt: state.setting.ktt_nama, persetujuan: state.setting.mp_judul_persetujuan }) +
         (params.get('ids') ? '' : '<button class="btn sm danger buang no-print" data-buang="' + c.id + '" title="Keluarkan dari cetakan">×</button>') + '</div>').join('') + '</div>').join('') + '</div>';
