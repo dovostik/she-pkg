@@ -71,14 +71,17 @@
     catch (e) { return pesan(esc(A().errMsg(e))); }
     const kunciLokal = 'ujian_' + r.sesi, jawab = { ...(r.jawaban || {}), ...ls.get(kunciLokal, {}) };
     const geser = new Date(r.sekarang).getTime() - Date.now(), batas = new Date(r.batas_at).getTime();
-    const pg = r.soal.filter(s => s.tipe === 'pg'), rb = r.soal.filter(s => s.tipe === 'rambu');
+    // urutan soal & pilihan diacak per peserta (tetap sama bila halaman dimuat ulang: benih = ID sesi)
+    let benih = [...r.sesi].reduce((h, ch) => (Math.imul(h ^ ch.charCodeAt(0), 16777619)) >>> 0, 2166136261);
+    const acak = () => { benih = (benih + 0x6D2B79F5) >>> 0; let t = benih; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+    const kocok = arr => { const a = arr.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(acak() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+    const daftar = kocok(r.soal);
     kerangka('<div class="ujian-bar"><span id="sisa">--:--</span><span id="terisi"></span><span id="simpan" class="small"></span></div>' +
-      '<p class="small muted">' + esc(r.peserta?.nama) + ' · ' + esc(r.nomor) + ' · percobaan ' + r.percobaan + '/' + r.maks + '</p>' +
-      '<h3>Pilihan ganda — pilih satu jawaban yang benar</h3>' +
-      pg.map((s, i) => '<div class="soal" data-id="' + s.id + '"><p><b>' + (i + 1) + '.</b> ' + esc(s.teks) + '</p>' +
-        s.pilihan.map(o => '<label class="opsi"><input type="radio" name="s' + s.id + '" value="' + o.k + '"' + (jawab[s.id] === o.k ? ' checked' : '') + '><span><b>' + o.k + '.</b> ' + esc(o.t) + '</span></label>').join('') + '</div>').join('') +
-      (rb.length ? '<h3>Rambu-rambu lalu lintas tambang — tuliskan artinya</h3>' + rb.map((s, i) => '<div class="soal" data-id="' + s.id + '"><p><b>' + (pg.length + i + 1) + '.</b> ' + esc(s.teks) + '</p>' +
-        (s.gambar ? '<img class="rambu" src="' + esc(s.gambar) + '" alt="rambu">' : '') + '<input class="isian" name="s' + s.id + '" maxlength="200" placeholder="Arti rambu ini…" value="' + esc(jawab[s.id] || '') + '"></div>').join('') : '') +
+      '<p class="small muted">' + esc(r.peserta?.nama) + ' · ' + esc(r.nomor) + ' · percobaan ' + r.percobaan + '/' + r.maks + ' · ' + daftar.length + ' soal, pilih satu jawaban yang paling benar</p>' +
+      daftar.map((s, i) => '<div class="soal" data-id="' + s.id + '"><p><b>' + (i + 1) + '.</b> ' + esc(s.teks) + '</p>' +
+        (s.gambar ? '<img class="rambu" src="' + esc(s.gambar) + '" alt="rambu">' : '') +
+        ((s.pilihan || []).length ? kocok(s.pilihan).map((o, j) => '<label class="opsi"><input type="radio" name="s' + s.id + '" value="' + o.k + '"' + (jawab[s.id] === o.k ? ' checked' : '') + '><span><b>' + 'ABCD'[j] + '.</b> ' + esc(o.t) + '</span></label>').join('')
+          : '<input class="isian" name="s' + s.id + '" maxlength="200" placeholder="Tulis jawaban…" value="' + esc(jawab[s.id] || '') + '">') + '</div>').join('') +
       '<div class="actions"><button class="btn primary" id="kirimujian">Selesai & kirim jawaban</button></div>');
     const total = r.soal.length;
     const hitung = () => { const n = r.soal.filter(s => (jawab[s.id] || '').toString().trim()).length; $('#terisi').textContent = n + '/' + total + ' terjawab'; return n; };
@@ -112,7 +115,7 @@
     if (h.status === 'menunggu_nilai_rambu')
       kerangka('<div class="note ok"><b>Jawaban terkirim.</b><br>Pilihan ganda: <b>' + h.benar_pg + ' dari ' + h.jumlah_pg + '</b> benar.<br>' + h.jumlah_rambu + ' soal rambu sedang dinilai tim SHE. Nilai akhir muncul di permohonan Mine Permit.</div><div class="actions"><a class="btn ghost" href="./">Selesai</a></div>');
     else
-      kerangka('<div class="note ' + (h.lulus ? 'ok' : 'err') + '"><b>' + (h.lulus ? 'LULUS' : 'BELUM LULUS') + '</b> ujian teori — nilai <b>' + h.nilai + '</b> (minimal ' + h.minimal + ').<br>Pilihan ganda: ' + h.benar_pg + ' dari ' + h.jumlah_pg + ' benar.</div>' + ul +
+      kerangka('<div class="note ' + (h.lulus ? 'ok' : 'err') + '"><b>' + (h.lulus ? 'LULUS' : 'BELUM LULUS') + '</b> ujian teori — nilai <b>' + h.nilai + '</b> (minimal ' + h.minimal + ').<br>Jawaban benar: ' + h.benar_pg + ' dari ' + h.jumlah_pg + ' soal.' + (h.lulus ? '<br>Permohonan diteruskan ke SPV SHE untuk persetujuan.' : '') + '</div>' + ul +
         (!h.lulus && !h.boleh_ulang ? '<div class="note">Kesempatan ujian sudah habis. Hubungi tim SHE.</div>' : '') + '<div class="actions"><a class="btn ghost" href="./">Selesai</a></div>');
   }
 
@@ -120,7 +123,7 @@
   async function kotakPermohonan(el, p, she) {
     const sb = A().sb, q = A().q;
     const [sesi, soalR] = await Promise.all([q(sb.from('ujian_sesi').select('id,percobaan,mulai_at,selesai_at,status,jawaban,benar_pg,jumlah_pg,jumlah_rambu,nilai,lulus,nilai_rambu').eq('pengajuan_id', p.id).order('percobaan')),
-      she ? q(sb.from('ujian_soal').select('id,no,teks,gambar,kunci').eq('tipe', 'rambu').eq('aktif', true).order('no')) : Promise.resolve([])]);
+      she ? q(sb.from('ujian_soal').select('id,no,teks,gambar,kunci,pilihan').eq('aktif', true).order('no')).then(x => x.filter(s => !(s.pilihan || []).length)) : Promise.resolve([])]);
     if (p.status !== 'uji' && !sesi.length) { el.remove(); return; }
     const siap = !!A().state.setting.ujian_kunci_siap, min = (A().state.setting.kimper_nilai_lulus || {}).teori ?? 70;
     let html = '<h3>Ujian teori</h3>';
@@ -130,9 +133,9 @@
         '<div class="ujian-qr"><div class="qrbox">' + svg + '</div><div class="small"><b>Cara ujian:</b><ol><li>Peserta membuka web SHE PKG di HP-nya.</li><li>Di halaman masuk, tekan <b>📝 Ujian teori Mine Permit</b>.</li><li>Scan QR ini, cek nama, lalu mulai (' + (A().state.setting.ujian_durasi_menit || 30) + ' menit).</li></ol>' +
         '<p class="muted">QR khusus permohonan ini — jangan dibagikan. Bisa juga dibuka dengan kamera HP biasa.</p></div></div>';
     }
-    html += sesi.length ? '<table class="tbl"><thead><tr><th>Ke</th><th>Waktu</th><th>Pilihan ganda</th><th>Nilai</th></tr></thead><tbody>' + sesi.map(s => '<tr><td>' + s.percobaan + '</td><td><small>' + A().tgl(s.mulai_at) + ' ' + A().jam(s.mulai_at) + '</small></td>' +
-      '<td>' + (s.benar_pg != null ? s.benar_pg + '/' + s.jumlah_pg : '—') + '</td><td>' + (s.status === 'berjalan' ? '<span class="badge">sedang ujian</span>' : s.status === 'menunggu_nilai_rambu' ? '<span class="badge hz-baru">menunggu nilai rambu</span>' :
-        '<b class="' + (s.lulus ? 'ok-t' : 'err') + '">' + s.nilai + '</b> ' + (s.lulus ? 'Lulus' : 'Belum lulus')) + '</td></tr>').join('') + '</tbody></table><p class="small muted">Lulus bila nilai ≥ ' + min + '. Praktik: diganti surat pernyataan kompetensi.</p>'
+    html += sesi.length ? '<table class="tbl"><thead><tr><th>Ke</th><th>Waktu</th><th>Benar</th><th>Nilai</th></tr></thead><tbody>' + sesi.map(s => '<tr><td>' + s.percobaan + '</td><td><small>' + A().tgl(s.mulai_at) + ' ' + A().jam(s.mulai_at) + '</small></td>' +
+      '<td>' + (s.benar_pg != null ? s.benar_pg + '/' + s.jumlah_pg + ' benar' : '—') + '</td><td>' + (s.status === 'berjalan' ? '<span class="badge">sedang ujian</span>' : s.status === 'menunggu_nilai_rambu' ? '<span class="badge hz-baru">menunggu nilai rambu</span>' :
+        '<b class="' + (s.lulus ? 'ok-t' : 'err') + '">' + s.nilai + '</b> ' + (s.lulus ? 'Lulus' : 'Belum lulus')) + '</td></tr>').join('') + '</tbody></table><p class="small muted">Nilai = jawaban benar ÷ jumlah soal × 100. Lulus bila ≥ ' + min + '. Praktik: diganti surat pernyataan kompetensi.</p>'
       : (p.status === 'uji' ? '<p class="muted small">Belum ada peserta yang mengerjakan.</p>' : '');
     const tunggu = sesi.find(s => s.status === 'menunggu_nilai_rambu');
     if (she && tunggu) {
@@ -153,17 +156,20 @@
     const sb = A().sb, q = A().q;
     const [soal, st] = await Promise.all([q(sb.from('ujian_soal').select('*').order('tipe').order('no')), q(sb.from('setting').select('k,v').in('k', ['ujian_kunci_siap', 'ujian_durasi_menit', 'ujian_maks_percobaan', 'kimper_nilai_lulus']))]);
     const S = Object.fromEntries(st.map(x => [x.k, x.v])), siap = !!S.ujian_kunci_siap;
-    const pg = soal.filter(s => s.tipe === 'pg'), rb = soal.filter(s => s.tipe === 'rambu'), tanpa = pg.filter(s => s.aktif && !['a', 'b', 'c'].includes(s.kunci)).length;
-    v.innerHTML = '<div class="page-head"><div><a href="#/pengajuan" class="back">‹ Pengajuan</a><h1>Bank soal ujian teori</h1><div class="muted">' + pg.length + ' pilihan ganda + ' + rb.length + ' rambu · ' + (S.ujian_durasi_menit || 30) + ' menit · maks ' + (S.ujian_maks_percobaan || 2) + ' percobaan · lulus ≥ ' + ((S.kimper_nilai_lulus || {}).teori ?? 70) + '</div></div></div>' +
-      '<div class="note ' + (siap ? 'ok' : 'warn') + '">' + (siap ? '<b>Ujian DIBUKA.</b> Peserta dengan QR permohonan bisa mengerjakan ujian.' : '<b>Ujian DITUTUP.</b> ' + (tanpa ? tanpa + ' soal pilihan ganda belum punya kunci jawaban.' : 'Semua kunci sudah diisi — periksa lalu tekan Konfirmasi.')) +
+    const pg = soal.filter(s => s.tipe === 'pg'), rb = soal.filter(s => s.tipe === 'rambu'), aktif = soal.filter(s => s.aktif);
+    const tanpa = aktif.filter(s => (s.pilihan || []).length && !['a', 'b', 'c', 'd'].includes(s.kunci)).length;
+    const kartuSoal = (s, label) => '<div class="box soal-bank" data-id="' + s.id + '"><p><b>' + label + '.</b> ' + esc(s.teks) + '</p>' + (s.gambar ? '<img class="rambu" src="' + esc(s.gambar) + '" alt="">' : '') +
+      ((s.pilihan || []).length ? s.pilihan.map(o => '<label class="opsi' + (s.kunci === o.k ? ' kunci' : '') + '"><input type="radio" name="k' + s.id + '" value="' + o.k + '"' + (s.kunci === o.k ? ' checked' : '') + '><span><b>' + o.k + '.</b> ' + esc(o.t) + '</span></label>').join('')
+        : '<label class="lbl">Jawaban acuan (dinilai SHE)<input name="acuan" value="' + esc(s.kunci || '') + '"></label>') + '</div>';
+    v.innerHTML = '<div class="page-head"><div><a href="#/pengajuan" class="back">‹ Pengajuan</a><h1>Bank soal ujian teori</h1><div class="muted">' + aktif.length + ' soal (' + pg.length + ' umum + ' + rb.length + ' rambu) · pilihan a–d · urutan soal & pilihan diacak per peserta · ' + (S.ujian_durasi_menit || 30) + ' menit · maks ' + (S.ujian_maks_percobaan || 2) + ' percobaan · lulus ≥ ' + ((S.kimper_nilai_lulus || {}).teori ?? 70) + '</div></div></div>' +
+      '<div class="note ' + (siap ? 'ok' : 'warn') + '">' + (siap ? '<b>Ujian DIBUKA.</b> Peserta dengan QR permohonan bisa mengerjakan ujian.' : '<b>Ujian DITUTUP.</b> ' + (tanpa ? tanpa + ' soal belum punya kunci jawaban.' : 'Semua kunci sudah diisi — periksa lalu tekan Konfirmasi.')) +
       ' <button class="btn sm ' + (siap ? 'danger' : 'primary') + '" id="siap"' + (!siap && tanpa ? ' disabled' : '') + '>' + (siap ? 'Tutup ujian' : 'Konfirmasi kunci & buka ujian') + '</button></div>' +
-      '<p class="small muted">Klik huruf untuk menandai kunci jawaban (tersimpan otomatis). Kunci tidak pernah dikirim ke HP peserta.</p>' +
-      pg.map(s => '<div class="box soal-bank" data-id="' + s.id + '"><p><b>' + s.no + '.</b> ' + esc(s.teks) + '</p>' + s.pilihan.map(o => '<label class="opsi' + (s.kunci === o.k ? ' kunci' : '') + '"><input type="radio" name="k' + s.id + '" value="' + o.k + '"' + (s.kunci === o.k ? ' checked' : '') + '><span><b>' + o.k + '.</b> ' + esc(o.t) + '</span></label>').join('') + '</div>').join('') +
-      '<h3>Soal rambu (isian, dinilai SHE)</h3>' + rb.map(s => '<div class="box soal-bank rambu-bank" data-id="' + s.id + '"><img class="rambu" src="' + esc(s.gambar) + '" alt=""><label class="lbl">Arti rambu (acuan penilaian) — rambu ' + s.no + '<input name="acuan" value="' + esc(s.kunci || '') + '"></label></div>').join('');
+      '<p class="small muted">Klik pilihan untuk menandai kunci jawaban (hijau, tersimpan otomatis). Kunci tidak pernah dikirim ke HP peserta.</p>' +
+      pg.map(s => kartuSoal(s, s.no)).join('') + '<h3>Soal rambu</h3>' + rb.map(s => kartuSoal(s, 'Rambu ' + s.no)).join('');
     $$('.soal-bank input[type=radio]').forEach(x => x.onchange = async () => { const box = x.closest('.soal-bank');
       try { await q(sb.from('ujian_soal').update({ kunci: x.value, diubah_oleh: A().state.user.id, diubah_at: new Date().toISOString() }).eq('id', box.dataset.id));
         $$('.opsi', box).forEach(l => l.classList.toggle('kunci', $('input', l).checked)); A().toast('Kunci soal disimpan'); } catch (e) { A().toast(A().errMsg(e), 'err'); } });
-    $$('.rambu-bank input[name=acuan]').forEach(x => x.onchange = async () => { try { await q(sb.from('ujian_soal').update({ kunci: x.value.trim(), diubah_oleh: A().state.user.id, diubah_at: new Date().toISOString() }).eq('id', x.closest('.soal-bank').dataset.id)); A().toast('Acuan disimpan'); } catch (e) { A().toast(A().errMsg(e), 'err'); } });
+    $$('.soal-bank input[name=acuan]').forEach(x => x.onchange = async () => { try { await q(sb.from('ujian_soal').update({ kunci: x.value.trim(), diubah_oleh: A().state.user.id, diubah_at: new Date().toISOString() }).eq('id', x.closest('.soal-bank').dataset.id)); A().toast('Acuan disimpan'); } catch (e) { A().toast(A().errMsg(e), 'err'); } });
     $('#siap').onclick = async e => { if (!confirm(siap ? 'Tutup ujian? Peserta tidak bisa memulai ujian baru.' : 'Kunci jawaban sudah benar dan ujian dibuka?')) return;
       try { await q(sb.rpc('ujian_atur_siap', { p_siap: !siap })); A().state.setting.ujian_kunci_siap = !siap; A().toast(siap ? 'Ujian ditutup' : 'Ujian dibuka'); A().route(); } catch (er) { A().toast(A().errMsg(er), 'err'); } };
   }
