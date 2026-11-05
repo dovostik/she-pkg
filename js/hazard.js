@@ -439,16 +439,18 @@
   async function viewArea(v) {
     if (!isShe()) { v.innerHTML = '<div class="empty">Khusus tim SHE.</div>'; return; }
     const sb = A().sb, q = A().q;
-    const [as, ap] = await Promise.all([q(sb.from('area').select('id,kode,nama,jenis,aktif,urut').order('aktif', { ascending: false }).order('urut', { nullsFirst: false }).order('nama')),
+    const [as, ap] = await Promise.all([q(sb.from('area').select('id,kode,nama,jenis,aktif,urut,perusahaan_id').order('aktif', { ascending: false }).order('urut', { nullsFirst: false }).order('nama')),
       q(sb.from('area_pic').select('area_id,user_id,profil:user_id(nama,email,jabatan)').eq('aktif', true))]);
     v.innerHTML = '<div class="page-head"><div><a href="#/hazard" class="back">‹ Hazard</a><h1>PIC area</h1><div class="muted">Temuan di sebuah area otomatis diteruskan ke PIC-nya. Satu area boleh lebih dari satu PIC (mis. pengganti saat cuti).</div></div></div>' +
       '<p class="small muted">Penunjukan PIC juga bisa dilakukan SPV saat menyetujui akun (menu Akun). Akun tetap menjadi PIC sampai diubah tim SHE.</p>' +
       '<div class="mp-list">' + as.map(a => { const pics = ap.filter(x => x.area_id === a.id);
         return '<div class="box area-box' + (a.aktif ? '' : ' nonaktif') + '" data-a="' + a.id + '"><div class="akun-head"><div><b>' + esc(a.nama) + '</b> <small class="muted">' + esc(a.kode) + '</small>' + (a.aktif ? '' : ' <span class="badge">nonaktif</span>') + '</div>' +
           '<button class="btn sm ghost" data-tg="' + a.id + '" data-on="' + a.aktif + '">' + (a.aktif ? 'Nonaktifkan' : 'Aktifkan') + '</button></div>' +
+          '<label class="small per-area">Milik perusahaan <select data-per="' + a.id + '"><option value="">—</option>' + (A().state.perusahaan || []).map(x => '<option value="' + x.id + '"' + (x.id === a.perusahaan_id ? ' selected' : '') + '>' + esc(x.nama) + '</option>').join('') + '</select> <span class="muted">— PIC SHE perusahaan ini bisa melihat semua temuan di area ini</span></label>' +
           '<div class="chips">' + (pics.length ? pics.map(p => '<span class="chip">' + esc(p.profil?.nama || '?') + (p.profil?.jabatan ? ' <small>' + esc(p.profil.jabatan) + '</small>' : '') + ' <button data-del="' + p.user_id + '" aria-label="Hapus PIC">✕</button></span>').join('') : '<span class="warn small">PIC belum ditunjuk</span>') + '</div>' +
           '<input class="pcari" placeholder="+ Tambah PIC: ketik nama / email akun" autocomplete="off"><div class="suggest psug"></div></div>'; }).join('') + '</div>' +
       '<form class="box form" id="fareab"><h3>Tambah area</h3><div class="grid3"><label class="lbl">Nama area / PIC<input name="nama" required placeholder="mis. CSMU Disposal"></label><label class="lbl">Kode<input name="kode" required placeholder="mis. CSMU-DISP"></label>' +
+      '<label class="lbl">Milik perusahaan<select name="per"><option value="">—</option>' + (A().state.perusahaan || []).map(x => '<option value="' + x.id + '">' + esc(x.nama) + '</option>').join('') + '</select></label>' +
       '<label class="lbl">Jenis<select name="jenis">' + ['pit', 'disposal', 'hauling', 'workshop', 'fuel', 'gudang', 'tps_b3', 'kantor', 'mess', 'jetty', 'nursery', 'reklamasi', 'lainnya'].map(j => '<option>' + j + '</option>').join('') + '</select></label></div><button class="btn primary">Tambah area</button></form>';
     $$('.area-box').forEach(box => {
       const aid = +box.dataset.a, inp = $('.pcari', box), sug = $('.psug', box); let t;
@@ -458,6 +460,7 @@
         $$('[data-u]', sug).forEach(b => b.onclick = () => aturArea(b.dataset.u, aid, true, 'PIC ditambahkan'));
       }, 250); };
       $$('[data-del]', box).forEach(b => b.onclick = () => { if (confirm('Lepas PIC ini dari area? (riwayat penunjukan tetap tersimpan)')) aturArea(b.dataset.del, aid, false, 'PIC dilepas'); });
+      $('[data-per]', box).onchange = async e => { try { await q(sb.from('area').update({ perusahaan_id: e.target.value ? +e.target.value : null }).eq('id', aid)); A().toast('Perusahaan pemilik area disimpan'); } catch (er) { A().toast(A().errMsg(er), 'err'); } };
       $('[data-tg]', box).onclick = async e => { try { await q(sb.from('area').update({ aktif: e.target.dataset.on !== 'true' }).eq('id', aid)); A().route(); } catch (er) { A().toast(A().errMsg(er), 'err'); } };
     });
     async function aturArea(user, aid, tambah, pesan) {
@@ -466,7 +469,7 @@
         await q(sb.rpc('atur_pic_area', { p_user: user, p_area: baru })); A().toast(pesan); A().route(); } catch (e) { A().toast(A().errMsg(e), 'err'); }
     }
     $('#fareab').onsubmit = async e => { e.preventDefault(); const f = e.target;
-      try { await q(sb.from('area').insert({ nama: f.nama.value.trim(), kode: f.kode.value.trim().toUpperCase(), jenis: f.jenis.value, aktif: true, urut: 100 })); A().toast('Area ditambahkan'); A().route(); } catch (er) { A().toast(A().errMsg(er), 'err'); } };
+      try { await q(sb.from('area').insert({ nama: f.nama.value.trim(), kode: f.kode.value.trim().toUpperCase(), jenis: f.jenis.value, perusahaan_id: f.per.value ? +f.per.value : null, aktif: true, urut: 100 })); A().toast('Area ditambahkan'); A().route(); } catch (er) { A().toast(A().errMsg(er), 'err'); } };
   }
 
   window.Hazard = { view, kirimAntrian, viewPublik, kirimAntrianPublik, idPerangkat, infoPerangkat };
