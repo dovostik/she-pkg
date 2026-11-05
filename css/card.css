@@ -1,43 +1,43 @@
-/* Mine Permit — kartu 112,5 x 95,3 mm (depan & belakang masing-masing 56,25 mm, dilipat di tengah) */
+/* Mine Permit — dicetak 100 x 80 mm: depan & belakang masing-masing 50 x 80 mm, dilipat di tengah → kartu 5 x 8 cm (muat plastik laminating) */
 .mpc, .mpc * { box-sizing: border-box; margin: 0; padding: 0; }
-.mpc { width: 112.5mm; height: 95.3mm; display: flex; outline: .25mm solid #000; background: #fff; color: #000;
+.mpc { width: 100mm; height: 80mm; display: flex; outline: .21mm solid #000; background: #fff; color: #000;
   font-family: Arial, "Liberation Sans", Helvetica, sans-serif; line-height: 1.15; position: relative; overflow: hidden;
   -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-.mpc .front { width: 56.25mm; flex: none; border-right: .25mm dashed #000; display: flex; flex-direction: column; align-items: center; overflow: hidden; }
-.mpc .back { width: 56.25mm; flex: none; display: flex; flex-direction: column; overflow: hidden; }
-.mpc .hdr { height: 9mm; width: 100%; display: flex; align-items: center; justify-content: space-between; padding: 0 1.5mm; }
-.mpc .hm { height: 5.2mm; } .mpc .k3 { height: 7.5mm; }
-.mpc .title { height: 8mm; line-height: 8mm; color: #e00; font-weight: 900; font-size: 6.6mm; letter-spacing: .2mm; white-space: nowrap; }
-.mpc .acc { height: 7.5mm; width: 100%; line-height: 7.3mm; text-align: center; font-weight: bold; font-size: 6mm;
-  border-top: .35mm solid #000; border-bottom: .35mm solid #000; white-space: nowrap; }
+.mpc .front { width: 50mm; flex: none; border-right: .21mm dashed #000; display: flex; flex-direction: column; align-items: center; overflow: hidden; }
+.mpc .back { width: 50mm; flex: none; display: flex; flex-direction: column; overflow: hidden; }
+.mpc .hdr { height: 7.56mm; width: 100%; display: flex; align-items: center; justify-content: space-between; padding: 0 1.26mm; }
+.mpc .hm { height: 4.37mm; } .mpc .k3 { height: 6.3mm; }
+.mpc .title { height: 6.72mm; line-height: 6.72mm; color: #e00; font-weight: 900; font-size: 5.54mm; letter-spacing: .17mm; white-space: nowrap; }
+.mpc .acc { height: 6.3mm; width: 100%; line-height: 6.13mm; text-align: center; font-weight: bold; font-size: 5.04mm;
+  border-top: .29mm solid #000; border-bottom: .29mm solid #000; white-space: nowrap; }
 .mpc .full { background: #92D050; } .mpc .restr { background: #FFC000; }
-.mpc .co { font-weight: bold; font-size: 3.4mm; margin-top: 1mm; white-space: nowrap; }
-.mpc .no { font-weight: bold; margin-top: .4mm; white-space: nowrap; }
-.mpc .foto { margin-top: 1.4mm; width: 30mm; height: 40mm; border: .3mm solid #000; overflow: hidden; flex: none; background: #ddd; }
+.mpc .co { font-weight: bold; font-size: 2.85mm; margin-top: .84mm; white-space: nowrap; }
+.mpc .no { font-weight: bold; margin-top: .34mm; white-space: nowrap; }
+.mpc .foto { margin-top: 1.18mm; width: 25.18mm; height: 33.58mm; border: .25mm solid #000; overflow: hidden; flex: none; background: #ddd; }
 .mpc .foto img { width: 100%; height: 100%; display: block; object-fit: cover; }
-.mpc .nama { font-weight: bold; text-decoration: underline; margin-top: 1.4mm; white-space: nowrap; max-width: 54mm; overflow: hidden; }
-.mpc .jab { font-weight: bold; margin-top: .7mm; white-space: nowrap; max-width: 54mm; overflow: hidden; }
-.mpc .ber { font-weight: bold; font-size: 2.9mm; margin-top: auto; margin-bottom: 1.2mm; white-space: nowrap; }
-.mpc .kv { display: flex; align-items: center; font-size: 2.7mm; padding-left: 1mm; border-bottom: .25mm solid #000; white-space: nowrap; }
-.mpc .kv span { width: 21mm; font-weight: bold; flex: none; }
-.mpc .r1 { height: 7mm; } .mpc .r2 { height: 6.5mm; } .mpc .r3 { height: 6.5mm; } .mpc .r4 { height: 6.5mm; }
-.mpc .ops { height: 25mm; padding: 1mm; overflow: hidden; }
-.mpc .opt { text-align: center; font-weight: bold; font-size: 2.8mm; margin-bottom: .8mm; }
-.mpc ul { list-style: none; font-size: 2.15mm; font-weight: bold; line-height: 2.5mm; }
-.mpc .appr { border-top: .25mm solid #000; height: 19.5mm; display: flex; flex-direction: column; align-items: center; flex: none; }
-.mpc .wajib { font-size: 1.75mm; font-weight: bold; margin-top: .5mm; white-space: nowrap; }
-.mpc .mt { font-size: 2.9mm; font-weight: bold; margin-top: 1.2mm; }
-.mpc .ttd { height: 8.3mm; margin-top: .2mm; } .mpc .ktt { font-size: 3mm; font-weight: bold; }
-.mpc .qr { flex: 1; border-top: .35mm solid #000; display: flex; align-items: center; gap: 2mm; padding: 0 2mm; }
-.mpc .qrimg { width: 18.5mm; height: 18.5mm; flex: none; } .mpc .qrimg svg { width: 100%; height: 100%; display: block; }
-.mpc .ql { font-size: 2.3mm; font-weight: bold; color: #0C4F8F; } .mpc .qn { font-weight: bold; margin-top: .6mm; white-space: nowrap; }
-.mpc .acd { margin-top: 1.4mm; text-align: center; width: 24mm; }
-.mpc .acl { font-size: 2.6mm; font-weight: bold; text-decoration: underline; }
-.mpc .dots { display: flex; justify-content: space-between; width: 16mm; margin: 1mm auto 0; }
-.mpc .dots i { width: 3.6mm; height: 3.6mm; border-radius: 50%; border: .25mm solid #333; display: block; position: relative; }
+.mpc .nama { font-weight: bold; text-decoration: underline; margin-top: 1.18mm; white-space: nowrap; max-width: 48mm; overflow: hidden; }
+.mpc .jab { font-weight: bold; margin-top: .59mm; white-space: nowrap; max-width: 48mm; overflow: hidden; }
+.mpc .ber { font-weight: bold; font-size: 2.43mm; margin-top: auto; margin-bottom: 1.01mm; white-space: nowrap; }
+.mpc .kv { display: flex; align-items: center; font-size: 2.27mm; padding-left: .84mm; border-bottom: .21mm solid #000; white-space: nowrap; }
+.mpc .kv span { width: 17.63mm; font-weight: bold; flex: none; }
+.mpc .r1 { height: 5.88mm; } .mpc .r2 { height: 5.46mm; } .mpc .r3 { height: 5.46mm; } .mpc .r4 { height: 5.46mm; }
+.mpc .ops { height: 20.99mm; padding: .84mm; overflow: hidden; }
+.mpc .opt { text-align: center; font-weight: bold; font-size: 2.35mm; margin-bottom: .67mm; }
+.mpc ul { list-style: none; font-size: 1.8mm; font-weight: bold; line-height: 2.1mm; }
+.mpc .appr { border-top: .21mm solid #000; height: 16.37mm; display: flex; flex-direction: column; align-items: center; flex: none; }
+.mpc .wajib { font-size: 1.47mm; font-weight: bold; margin-top: .42mm; white-space: nowrap; }
+.mpc .mt { font-size: 2.43mm; font-weight: bold; margin-top: 1.01mm; }
+.mpc .ttd { height: 6.97mm; margin-top: .17mm; } .mpc .ktt { font-size: 2.52mm; font-weight: bold; }
+.mpc .qr { flex: 1; border-top: .29mm solid #000; display: flex; align-items: center; gap: 1.68mm; padding: 0 1.68mm; }
+.mpc .qrimg { width: 15.53mm; height: 15.53mm; flex: none; } .mpc .qrimg svg { width: 100%; height: 100%; display: block; }
+.mpc .ql { font-size: 1.93mm; font-weight: bold; color: #0C4F8F; } .mpc .qn { font-weight: bold; margin-top: .5mm; white-space: nowrap; }
+.mpc .acd { margin-top: 1.18mm; text-align: center; width: 20.15mm; }
+.mpc .acl { font-size: 2.18mm; font-weight: bold; text-decoration: underline; }
+.mpc .dots { display: flex; justify-content: space-between; width: 13.43mm; margin: .84mm auto 0; }
+.mpc .dots i { width: 3.02mm; height: 3.02mm; border-radius: 50%; border: .21mm solid #333; display: block; position: relative; }
 .mpc .g { background: #92D050; } .mpc .y { background: #FFFF00; } .mpc .r { background: #FF0000; }
-.mpc .dots i.bolong::after { content: ""; position: absolute; inset: .7mm; border-radius: 50%; background: #fff; border: .2mm solid #333; }
+.mpc .dots i.bolong::after { content: ""; position: absolute; inset: .59mm; border-radius: 50%; background: #fff; border: .17mm solid #333; }
 
 /* Lembar A4 landscape, 4 kartu */
-.mp-sheet { width: 297mm; height: 210mm; display: grid; grid-template-columns: 112.5mm 112.5mm; grid-template-rows: 95.3mm 95.3mm;
-  column-gap: 6mm; row-gap: 4mm; justify-content: center; align-content: center; background: #fff; overflow: hidden; }
+.mp-sheet { width: 297mm; height: 210mm; display: grid; grid-template-columns: 100mm 100mm; grid-template-rows: 80mm 80mm;
+  column-gap: 12mm; row-gap: 12mm; justify-content: center; align-content: center; background: #fff; overflow: hidden; }

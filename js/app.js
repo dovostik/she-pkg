@@ -426,7 +426,7 @@
     const sheets = []; for (let i = 0; i < rows.length; i += 4) sheets.push(rows.slice(i, i + 4));
     v.innerHTML = '<div class="page-head no-print"><div><a href="#/mp" class="back">‹ Mine Permit</a><h1>Cetak Mine Permit</h1><div class="muted">' + rows.length + ' kartu · ' + sheets.length + ' lembar A4 landscape</div></div>' +
       '<div class="actions"><button class="btn primary" id="print">Cetak / simpan PDF</button></div></div>' +
-      '<div class="note no-print">Di jendela cetak pilih <b>kertas A4, orientasi landscape, skala 100% (jangan "Fit to page"), margin: None</b>, dan centang <b>Background graphics</b>. Tiap kartu 11,25 × 9,5 cm, lipat di garis putus-putus.</div>' +
+      '<div class="note no-print">Di jendela cetak pilih <b>kertas A4, orientasi landscape, skala 100% (jangan "Fit to page"), margin: None</b>, dan centang <b>Background graphics</b>. Tiap kartu dicetak 10 × 8 cm, lipat di garis putus-putus → kartu 5 × 8 cm (depan kiri, belakang kanan).</div>' +
       (noFoto.length ? '<div class="note warn no-print">' + noFoto.length + ' kartu belum punya foto: ' + esc(noFoto.map(r => r.nama).join(', ')) + '</div>' : '') +
       '<div class="print-area">' + sheets.map((s, i) => '<div class="sheet-lbl no-print">Lembar ' + (i + 1) + ' dari ' + sheets.length + '</div><div class="mp-sheet">' + s.map(c => '<div class="cell">' + MPCard.renderCard(c, { foto: urls[c.foto_path], ktt: state.setting.ktt_nama, persetujuan: state.setting.mp_judul_persetujuan }) +
         (params.get('ids') ? '' : '<button class="btn sm danger buang no-print" data-buang="' + c.id + '" title="Keluarkan dari cetakan">×</button>') + '</div>').join('') + '</div>').join('') + '</div>';

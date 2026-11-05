@@ -21,7 +21,8 @@
   }
 
   function qrText(c) {
-    return 'MINE PERMIT PT HM\nNo: ' + c.nomor + '\nNama: ' + c.nama + '\nBerlaku s/d: ' + tglQr(c.berlaku_sampai) + '\nID: ' + String(c.token_qr || '').slice(0, 12).toUpperCase();
+    // ringkas agar QR besar & mudah dipindai di kartu 5 x 8 cm (nama & masa berlaku diambil dari data saat scan)
+    return 'MINE PERMIT PT HM\nNo: ' + c.nomor + '\nID: ' + String(c.token_qr || '').slice(0, 12).toUpperCase();
   }
 
   /* c = baris v_mine_permit; opt = {foto: url, ktt: 'AM. HARJANTO', persetujuan: 'MENYETUJUI KTT PT HM', accident: [{warna}]} */
@@ -38,10 +39,10 @@
         '<div class="title">MINE PERMIT</div>' +
         '<div class="acc ' + (full ? 'full' : 'restr') + '">' + (full ? 'FULL ACCESS' : 'RESTRICTED') + '</div>' +
         '<div class="co">PT. HAMPARAN MULYA</div>' +
-        '<div class="no" style="font-size:' + fs(c.nomor, 2.6, 24) + 'mm">' + esc(c.nomor) + '</div>' +
+        '<div class="no" style="font-size:' + fs(c.nomor, 2.18, 24) + 'mm">' + esc(c.nomor) + '</div>' +
         '<div class="foto">' + (opt.foto ? '<img src="' + esc(opt.foto) + '" alt="">' : '') + '</div>' +
-        '<div class="nama" style="font-size:' + fs(c.nama, 3.8, 18) + 'mm">' + esc(c.nama) + '</div>' +
-        '<div class="jab" style="font-size:' + fs(jab, 2.6, 30) + 'mm">' + esc(jab) + '</div>' +
+        '<div class="nama" style="font-size:' + fs(c.nama, 3.19, 18) + 'mm">' + esc(c.nama) + '</div>' +
+        '<div class="jab" style="font-size:' + fs(jab, 2.18, 30) + 'mm">' + esc(jab) + '</div>' +
         '<div class="ber">Berlaku Sampai ' + tglPendek(c.berlaku_sampai) + '</div>' +
       '</div>' +
       '<div class="back">' +
@@ -54,7 +55,7 @@
           '<div class="mt">' + esc(opt.persetujuan || 'MENYETUJUI KTT PT HM') + '</div><img src="img/ttd.png" class="ttd" alt="">' +
           '<div class="ktt">' + esc(opt.ktt || 'AM. HARJANTO') + '</div></div>' +
         '<div class="qr"><div class="qrimg">' + qrSvg(qrText(c)) + '</div><div class="qi">' +
-          '<div class="ql">ID MINE PERMIT</div><div class="qn" style="font-size:' + fs(c.nomor, 2.3, 22) + 'mm">' + esc(c.nomor) + '</div>' +
+          '<div class="ql">ID MINE PERMIT</div><div class="qn" style="font-size:' + fs(c.nomor, 1.93, 22) + 'mm">' + esc(c.nomor) + '</div>' +
           '<div class="acd"><div class="acl">Accident</div><div class="dots">' +
             '<i class="g' + (bolong.has('hijau') ? ' bolong' : '') + '"></i><i class="y' + (bolong.has('kuning') ? ' bolong' : '') + '"></i><i class="r' + (bolong.has('merah') ? ' bolong' : '') + '"></i>' +
           '</div></div></div></div>' +
