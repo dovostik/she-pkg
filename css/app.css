@@ -205,3 +205,4 @@ form.inline { display: flex; gap: .4rem; flex-wrap: wrap; margin-top: .6rem; } f
 .pub-head { background: #0C4F8F; color: #fff; padding: .8rem 1rem; position: sticky; top: 0; z-index: 5; }
 .pub-main { max-width: 640px; margin: 0 auto; padding: 1rem; }
 pre.wrap { white-space: pre-wrap; word-break: break-all; }
+.badge.st-nonaktif { background: #475467; color: #fff; }

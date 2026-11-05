@@ -2,7 +2,7 @@
    - File aplikasi: ambil dari jaringan (maks 4 detik), bila gagal pakai salinan di HP.
    - Library CDN (versi tetap): pakai salinan di HP.
    - Data Supabase tidak disimpan di sini (diatur aplikasi sendiri). */
-const VERSI = 'she-pkg-v4';
+const VERSI = 'she-pkg-v5';
 const APP = ['./', 'index.html', 'manifest.webmanifest', 'css/app.css', 'css/card.css',
   'js/config.js', 'js/card.js', 'js/foto.js', 'js/scan.js', 'js/hazard.js', 'js/app.js',
   'img/hm.png', 'img/k3.png', 'img/ttd.png', 'img/icon-192.png', 'img/icon-512.png', 'img/apple-touch-icon.png'];

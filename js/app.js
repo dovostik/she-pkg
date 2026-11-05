@@ -37,7 +37,7 @@
     m.addEventListener('click', e => { if (e.target === m || e.target.closest('[data-x]')) m.remove(); });
     return m;
   }
-  const statusBadge = s => '<span class="badge st-' + esc(s) + '">' + esc({ aktif: 'Aktif', kadaluarsa: 'Kadaluarsa', diganti: 'Diganti', ditangguhkan: 'Ditangguhkan', dicabut: 'Dicabut' }[s] || s) + '</span>';
+  const statusBadge = s => '<span class="badge st-' + esc(s) + '">' + esc({ aktif: 'Aktif', kadaluarsa: 'Kadaluarsa', diganti: 'Diganti', ditangguhkan: 'Ditangguhkan', dicabut: 'Dicabut', nonaktif: 'Nonaktif' }[s] || s) + '</span>';
   const PST = { draft: 'Draft', diajukan: 'Diajukan', verifikasi_dok: 'Verifikasi dokumen', uji: 'Uji unit', menunggu_approval: 'Menunggu persetujuan', disetujui: 'Disetujui', ditolak: 'Ditolak' };
   const JENIS_P = { baru: 'Baru', perpanjangan: 'Perpanjangan', tambah_unit: 'Tambah unit', ganti_hilang: 'Ganti hilang/rusak' };
 
@@ -264,12 +264,12 @@
       '<div class="page-head"><h1>Mine Permit' + (isPic() && picPer() ? ' — ' + esc(picPer().nama) : '') + '</h1>' + (canAjukan() ? '<a class="btn primary" href="#/pengajuan/baru">+ Pengajuan baru</a>' : '') + '</div>' +
       '<form class="filters" id="fmp"><input type="search" name="q" placeholder="Cari nama, nomor, atau NIK…" value="' + esc(f.q) + '">' +
       '<select name="per"><option value="">Semua perusahaan</option>' + state.perusahaan.map(p => '<option value="' + p.id + '"' + (String(p.id) === f.per ? ' selected' : '') + '>' + esc(p.nama) + '</option>').join('') + '</select>' +
-      '<select name="st">' + [['aktif', 'Aktif'], ['habis30', 'Habis ≤ 30 hari'], ['belumcetak', 'Aktif, belum dicetak'], ['kadaluarsa', 'Kadaluarsa'], ['semua', 'Semua status']].map(([k, t]) => '<option value="' + k + '"' + (k === f.st ? ' selected' : '') + '>' + t + '</option>').join('') + '</select>' +
+      '<select name="st">' + [['aktif', 'Aktif'], ['habis30', 'Habis ≤ 30 hari'], ['belumcetak', 'Aktif, belum dicetak'], ['kadaluarsa', 'Kadaluarsa'], ['semua', 'Semua status'], ['tidakaktif', 'Tidak aktif (dinonaktifkan)']].map(([k, t]) => '<option value="' + k + '"' + (k === f.st ? ' selected' : '') + '>' + t + '</option>').join('') + '</select>' +
       '<button class="btn">Cari</button></form>' +
       '<div class="printbar no-print" id="pbar"></div><div id="mplist" class="loading">Memuat…</div>';
     $('#fmp').onsubmit = e => { e.preventDefault(); const d = new FormData(e.target); location.hash = '#/mp?' + new URLSearchParams({ q: d.get('q'), per: d.get('per'), st: d.get('st') }); };
     renderPilih();
-    let qy = filterMP(sb.from('v_mine_permit').select('id,nomor,status,berlaku_sampai,akses_kartu,nama,nik,jabatan,perusahaan,foto_path,unit,dicetak_at,jml_pelanggaran', { count: 'exact' }), f)
+    let qy = filterMP(sb.from('v_mine_permit').select('id,nomor,status,berlaku_sampai,akses_kartu,nama,nik,jabatan,perusahaan,foto_path,unit,dicetak_at,jml_pelanggaran,nonaktif_alasan', { count: 'exact' }), f)
       .range(f.hal * N, f.hal * N + N - 1);
     const { data, count, error } = await qy; if (error) throw error;
     const urls = await fotoUrls(data.map(r => r.foto_path));
@@ -285,7 +285,7 @@
       '<small class="units">' + esc((r.unit || []).map(u => u.kode + ' (' + u.akses + ')').join(', ')) + '</small></span>' +
       '<span class="mp-side">' + statusBadge(r.status) + (r.akses_kartu === 'RESTRICTED' ? '<span class="badge restr">RESTRICTED</span>' : '') +
       '<small>s/d ' + tgl(r.berlaku_sampai) + '</small>' + (r.jml_pelanggaran ? '<small class="warn">' + r.jml_pelanggaran + ' pelanggaran</small>' : '') +
-      (r.status === 'aktif' && !r.dicetak_at ? '<small class="muted">belum dicetak</small>' : '') + '</span></a></div>').join('') + '</div>' +
+      (r.status === 'aktif' && !r.dicetak_at ? '<small class="muted">belum dicetak</small>' : '') + (r.status === 'nonaktif' ? '<small class="muted">' + esc(r.nonaktif_alasan || '') + '</small>' : '') + '</span></a></div>').join('') + '</div>' +
       pager(f, count, N, 'mp');
     $$('.pick', L).forEach(c => c.onchange = () => { c.checked ? state.pilih.add(c.dataset.id) : state.pilih.delete(c.dataset.id); simpanPilih(); renderPilih(); });
     if ($('#pilihhal')) $('#pilihhal').onclick = () => { data.forEach(r => state.pilih.add(r.id)); $$('.pick', L).forEach(c => c.checked = true); simpanPilih(); renderPilih(); };
@@ -303,6 +303,8 @@
     if (f.per) qy = qy.eq('perusahaan_id', f.per);
     if (f.st === 'aktif') qy = qy.eq('status', 'aktif');
     if (f.st === 'kadaluarsa') qy = qy.eq('status', 'kadaluarsa');
+    if (f.st === 'semua') qy = qy.neq('status', 'nonaktif');
+    if (f.st === 'tidakaktif') qy = qy.eq('status', 'nonaktif');
     if (f.st === 'belumcetak') qy = qy.eq('status', 'aktif').is('dicetak_at', null);
     if (f.st === 'habis30') { const d = new Date(); d.setDate(d.getDate() + 30); qy = qy.eq('status', 'aktif').lte('berlaku_sampai', d.toISOString().slice(0, 10)); }
     return qy.order(f.st === 'habis30' ? 'berlaku_sampai' : 'nama').order('id');
@@ -317,8 +319,23 @@
   function renderPilih() {
     const b = $('#pbar'); if (!b || !isShe()) return;
     const n = state.pilih.size;
-    b.innerHTML = n ? '<span><b>' + n + '</b> Mine Permit dipilih (' + Math.ceil(n / 4) + ' lembar A4)</span><a class="btn primary sm" href="#/cetak">Cetak terpilih</a><button class="btn sm ghost" id="kosong">Kosongkan</button>' : '';
-    if (n) $('#kosong').onclick = () => { state.pilih.clear(); simpanPilih(); renderPilih(); $$('.pick').forEach(c => c.checked = false); };
+    const tdk = new URLSearchParams(location.hash.split('?')[1] || '').get('st') === 'tidakaktif';
+    b.innerHTML = n ? '<span><b>' + n + '</b> Mine Permit dipilih' + (tdk ? '' : ' (' + Math.ceil(n / 4) + ' lembar A4)') + '</span>' +
+      (tdk ? '<button class="btn primary sm" id="aktifkanpilih">Aktifkan kembali terpilih</button>' : '<a class="btn primary sm" href="#/cetak">Cetak terpilih</a><button class="btn sm danger" id="nonaktifpilih">Nonaktifkan terpilih</button>') +
+      '<button class="btn sm ghost" id="kosong">Kosongkan</button>' : '';
+    if (!n) return;
+    $('#kosong').onclick = () => { state.pilih.clear(); simpanPilih(); renderPilih(); $$('.pick').forEach(c => c.checked = false); };
+    const ubahAktif = async (nonaktif, btn) => {
+      const alasan = nonaktif ? prompt('Alasan menonaktifkan ' + n + ' Mine Permit (mis. karyawan keluar / pindah site):') : 'Diaktifkan kembali';
+      if (!alasan || !alasan.trim()) return nonaktif && alasan !== null ? toast('Alasan wajib diisi', 'err') : null;
+      if (!confirm((nonaktif ? 'Nonaktifkan ' : 'Aktifkan kembali ') + n + ' Mine Permit?')) return;
+      busy(btn, true);
+      try { const jml = await q(sb.rpc('nonaktifkan_mine_permit', { p_ids: [...state.pilih], p_alasan: alasan.trim(), p_nonaktif: nonaktif }));
+        state.pilih.clear(); simpanPilih(); toast(jml + ' Mine Permit ' + (nonaktif ? 'dinonaktifkan' : 'diaktifkan kembali')); route(); }
+      catch (e) { toast(errMsg(e), 'err'); busy(btn, false); }
+    };
+    if ($('#nonaktifpilih')) $('#nonaktifpilih').onclick = e => ubahAktif(true, e.target);
+    if ($('#aktifkanpilih')) $('#aktifkanpilih').onclick = e => ubahAktif(false, e.target);
   }
 
   /* ---------- detail Mine Permit ---------- */
@@ -331,6 +348,8 @@
       q(sb.from('kimper_accident').select('tgl,tingkat,warna,dilubangi,keterangan').eq('kimper_id', id).order('tgl')),
       q(sb.from('pelanggaran').select('id,nomor,tgl,lokasi,unit_no,tindakan,keterangan,pelanggaran_jenis(nama)').eq('kimper_id', id).order('tgl', { ascending: false }))
     ]);
+    try { (await q(sb.from('kimper_nonaktif_riwayat').select('nonaktif,alasan,at').eq('kimper_id', id))).forEach(r => log.push({ at: r.at, keterangan: (r.nonaktif ? 'Dinonaktifkan: ' : '') + (r.alasan || '') }));
+      log.sort((a, b) => b.at.localeCompare(a.at)); } catch (e) { }
     const url = await fotoUrl(c.foto_path);
     const FS = { otomatis: '', manual: '', resolusi_rendah: 'Foto kurang tajam', wajah_tidak_terdeteksi: 'Foto perlu dicek', kepala_terpotong: 'Kepala terpotong', perlu_diganti: 'Foto wajib diganti' };
     v.innerHTML =
@@ -338,8 +357,10 @@
       '<div class="head-badges">' + statusBadge(c.status) + (c.akses_kartu === 'RESTRICTED' ? '<span class="badge restr">RESTRICTED</span>' : '<span class="badge full">FULL ACCESS</span>') + '</div></div>' +
       '<div class="detail-grid"><section class="card-preview"><div class="scaler">' + MPCard.renderCard(c, { foto: url, ktt: state.setting.ktt_nama, persetujuan: state.setting.mp_judul_persetujuan, accident: acc }) + '</div>' +
       (FS[kr.foto_status] ? '<div class="note warn">' + FS[kr.foto_status] + '</div>' : '') +
+      (c.status === 'nonaktif' ? '<div class="note err"><b>Mine Permit dinonaktifkan</b> ' + tgl(c.nonaktif_at) + ': ' + esc(c.nonaktif_alasan || '-') + '<br><small>Tidak muncul di daftar biasa, dan saat discan dinyatakan TIDAK BOLEH.</small></div>' : '') +
       (isShe() ? '<div class="actions"><button class="btn primary" id="cetak1">Cetak</button><button class="btn" id="foto">Atur foto</button>' +
-        (['aktif', 'kadaluarsa'].includes(c.status) ? '<a class="btn" href="#/pengajuan/baru?karyawan=' + c.karyawan_id + '&jenis=perpanjangan&lama=' + c.id + '">Perpanjang</a><a class="btn" href="#/pengajuan/baru?karyawan=' + c.karyawan_id + '&jenis=tambah_unit&lama=' + c.id + '">Tambah unit</a>' : '') +
+        (c.status === 'nonaktif' ? '<button class="btn" id="aktifkan1">Aktifkan kembali</button>' : '<button class="btn danger" id="nonaktif1">Nonaktifkan</button>') +
+        (['aktif', 'kadaluarsa'].includes(c.status_asli || c.status) ? '<a class="btn" href="#/pengajuan/baru?karyawan=' + c.karyawan_id + '&jenis=perpanjangan&lama=' + c.id + '">Perpanjang</a><a class="btn" href="#/pengajuan/baru?karyawan=' + c.karyawan_id + '&jenis=tambah_unit&lama=' + c.id + '">Tambah unit</a>' : '') +
         '</div>' : '') + '</section>' +
       '<section class="info">' +
         '<div class="box"><h3>Data</h3><dl>' +
@@ -359,6 +380,12 @@
     fitPreview();
     if (!isShe()) return;
     $('#cetak1').onclick = () => { location.hash = '#/cetak?ids=' + c.id; };
+    const satu = async (nonaktif, btn) => {
+      const alasan = nonaktif ? prompt('Alasan menonaktifkan Mine Permit ' + c.nama + ' (mis. karyawan keluar / pindah site):') : 'Diaktifkan kembali';
+      if (alasan === null) return; if (!alasan.trim()) return toast('Alasan wajib diisi', 'err');
+      busy(btn, true); try { await q(sb.rpc('nonaktifkan_mine_permit', { p_ids: [c.id], p_alasan: alasan.trim(), p_nonaktif: nonaktif })); toast(nonaktif ? 'Mine Permit dinonaktifkan' : 'Mine Permit diaktifkan kembali'); route(); } catch (er) { toast(errMsg(er), 'err'); busy(btn, false); } };
+    if ($('#nonaktif1')) $('#nonaktif1').onclick = e => satu(true, e.target);
+    if ($('#aktifkan1')) $('#aktifkan1').onclick = e => satu(false, e.target);
     $('#foto').onclick = () => FotoEditor.open({ karyawan: kr, sb, onSaved: () => route() });
     $('#gd').onchange = async e => { try { await q(sb.from('karyawan').update({ golongan_darah: e.target.value || null }).eq('id', c.karyawan_id)); toast('Golongan darah disimpan'); route(); } catch (er) { toast(errMsg(er), 'err'); } };
     $$('[data-st]').forEach(b => b.onclick = async () => {

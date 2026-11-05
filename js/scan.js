@@ -35,7 +35,7 @@
         const rows = [];
         for (let i = 0; ; i += 1000) {
           const r = await A().q(A().sb.from('v_mine_permit').select('id,nomor,nama,perusahaan,jabatan,karyawan_id,status,berlaku_sampai,akses_kartu,token_qr,unit,jml_pelanggaran,nomor_lama')
-            .in('status', ['aktif', 'ditangguhkan', 'dicabut', 'kadaluarsa']).order('id').range(i, i + 999));
+            .in('status', ['aktif', 'ditangguhkan', 'dicabut', 'kadaluarsa', 'nonaktif']).order('id').range(i, i + 999));
           rows.push(...r.map(x => [x.token_qr.slice(0, 12), x.id, x.nomor, x.nama, x.perusahaan, x.jabatan, x.karyawan_id, x.status, x.berlaku_sampai, x.akses_kartu,
             (x.unit || []).map(u => u.nama + ' (' + u.akses + ')'), x.jml_pelanggaran, x.nomor_lama || '']));
           if (r.length < 1000) break;
