@@ -469,5 +469,5 @@
       try { await q(sb.from('area').insert({ nama: f.nama.value.trim(), kode: f.kode.value.trim().toUpperCase(), jenis: f.jenis.value, aktif: true, urut: 100 })); A().toast('Area ditambahkan'); A().route(); } catch (er) { A().toast(A().errMsg(er), 'err'); } };
   }
 
-  window.Hazard = { view, kirimAntrian, viewPublik, kirimAntrianPublik };
+  window.Hazard = { view, kirimAntrian, viewPublik, kirimAntrianPublik, idPerangkat, infoPerangkat };
 })();
