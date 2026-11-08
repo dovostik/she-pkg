@@ -13,7 +13,7 @@
   const hentiKamera = () => { if (loopId) cancelAnimationFrame(loopId); loopId = null; if (stream) stream.getTracks().forEach(t => t.stop()); stream = null; };
 
   function kerangka(isi) {
-    document.body.innerHTML = '<div class="publik"><header class="pub-head"><b>SHE PKG</b> · Ujian teori Mine Permit</header><main class="pub-main" id="ujm">' + isi + '</main></div>';
+    document.body.innerHTML = '<div class="publik"><header class="pub-head"><img class="pub-logo" src="img/pkg-mark.svg" alt=""><b>SHE PKG</b> · Ujian teori Mine Permit</header><main class="pub-main" id="ujm">' + isi + '</main></div>';
   }
   const pesan = (t, kind) => kerangka('<div class="note ' + (kind || 'err') + '">' + t + '</div><div class="actions"><a class="btn primary" href="./?ujian=1">Scan QR lagi</a><a class="btn ghost" href="./">Ke halaman masuk</a></div>');
 

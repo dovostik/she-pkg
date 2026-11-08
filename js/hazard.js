@@ -155,7 +155,7 @@
     const dev = await idPerangkat(); const info = await infoPerangkat(); kirimAntrianPublik();
     let areas = []; try { areas = await A().q(A().sb.from('area').select('id,nama,urut').eq('aktif', true).order('urut', { nullsFirst: false }).order('nama')); ls.set(KEY_AREA, areas); } catch (e) { areas = ls.get(KEY_AREA, []); }
     const idt = ls.get(KEY_ID, {}); let g = null, gErr = null; const foto = [];
-    document.body.innerHTML = '<div class="publik"><header class="pub-head">' + '<b>SHE PKG</b> · Lapor hazard</header><main class="pub-main">' +
+    document.body.innerHTML = '<div class="publik"><header class="pub-head">' + '<img class="pub-logo" src="img/pkg-mark.svg" alt=""><b>SHE PKG</b> · Lapor hazard</header><main class="pub-main">' +
       '<p class="small muted">Untuk karyawan & kontraktor tanpa akun. Laporan langsung masuk ke tim SHE PT Hamparan Mulya.</p>' +
       '<form id="fpub" class="form">' +
       '<fieldset><legend>Identitas pelapor</legend><label class="lbl">Nama lengkap<input name="nama" required minlength="3" autocomplete="name" value="' + esc(idt.nama || '') + '"></label>' +

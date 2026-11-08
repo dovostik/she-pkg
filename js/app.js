@@ -77,9 +77,9 @@
   }
 
   /* ---------- kerangka & router ---------- */
-  const LOGO = '<svg class="logo" viewBox="0 0 48 48" aria-hidden="true"><rect width="48" height="48" rx="10" fill="#fff"/><svg x="6" y="6" width="36" height="36" viewBox="10 10 397 293">' +
-    '<rect x="20" y="28" width="57" height="257" rx="28.5" fill="#0A8442"/><circle cx="113" cy="152" r="23" fill="#0A8442"/><rect x="148" y="28" width="57" height="257" rx="28.5" fill="#0A8442"/>' +
-    '<rect x="215" y="28" width="57" height="257" rx="28.5" fill="#0C4F8F"/><rect x="280" y="70" width="53" height="170" rx="26.5" fill="#0C4F8F"/><rect x="340" y="28" width="57" height="257" rx="28.5" fill="#0C4F8F"/></svg></svg>';
+  const LOGO = '<svg class="logo" viewBox="0 0 48 48" aria-hidden="true"><rect width="48" height="48" rx="10" fill="#fff"/>' +
+    '<svg x="6" y="6" width="36" height="36" viewBox="0 0 273 267"><g fill="none" stroke-width="10.8" stroke-linecap="round" stroke-linejoin="round"><path d="M111.1 6.4 L136.0 34.3 L160.9 6.4" stroke="#034896"/><path d="M71.0 27.6 L126.0 81.2" stroke="#034896"/><path d="M201.0 27.6 L146.0 81.2" stroke="#034896"/><path d="M35.7 54.8 L126.0 134.8" stroke="#034896"/><path d="M236.3 54.8 L146.0 134.8" stroke="#034896"/><path d="M6.2 80.3 L126.0 190.2 L126.0 259.6" stroke="#034896"/><path d="M265.8 80.3 L146.0 190.2 L146.0 259.6" stroke="#034896"/><path d="M87.9 14.7 L126.0 53.4" stroke="#017129"/><path d="M184.1 14.7 L146.0 53.4" stroke="#017129"/><path d="M52.9 39.8 L126.0 108.0" stroke="#017129"/><path d="M219.1 39.8 L146.0 108.0" stroke="#017129"/><path d="M20.9 66.6 L126.0 160.8" stroke="#017129"/><path d="M251.1 66.6 L146.0 160.8" stroke="#017129"/></g></svg></svg>';
+  const LOGO_BESAR = '<svg class="logo-pkg" viewBox="0 0 273 267" aria-hidden="true"><g fill="none" stroke-width="10.8" stroke-linecap="round" stroke-linejoin="round"><path d="M111.1 6.4 L136.0 34.3 L160.9 6.4" stroke="#034896"/><path d="M71.0 27.6 L126.0 81.2" stroke="#034896"/><path d="M201.0 27.6 L146.0 81.2" stroke="#034896"/><path d="M35.7 54.8 L126.0 134.8" stroke="#034896"/><path d="M236.3 54.8 L146.0 134.8" stroke="#034896"/><path d="M6.2 80.3 L126.0 190.2 L126.0 259.6" stroke="#034896"/><path d="M265.8 80.3 L146.0 190.2 L146.0 259.6" stroke="#034896"/><path d="M87.9 14.7 L126.0 53.4" stroke="#017129"/><path d="M184.1 14.7 L146.0 53.4" stroke="#017129"/><path d="M52.9 39.8 L126.0 108.0" stroke="#017129"/><path d="M219.1 39.8 L146.0 108.0" stroke="#017129"/><path d="M20.9 66.6 L126.0 160.8" stroke="#017129"/><path d="M251.1 66.6 L146.0 160.8" stroke="#017129"/></g></svg>';
 
   function tandaSinyal() {
     let b = $('#offbar');
@@ -96,9 +96,11 @@
     const b = $('#nbadge'); if (b) b.textContent = count ? (count > 99 ? '99+' : count) : '';
   }
   setInterval(hitungNotif, 60000);
+  if ('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('message', e => { if (e.data?.t === 'notif') hitungNotif(); });
   const keHash = h => '#' + (h || '/').replace(/^\/kimper\/pengajuan\//, '/pengajuan/').replace(/^\/kimper\//, '/mp/');
   async function bukaNotif() {
-    const m = modal('<div class="modal-head"><b>Notifikasi</b><span><button class="btn sm ghost" id="semuabaca">Tandai semua dibaca</button> <button class="icon-btn" data-x aria-label="Tutup">✕</button></span></div><div id="nlist" class="loading">Memuat…</div>');
+    const m = modal('<div class="modal-head"><b>Notifikasi</b><span><button class="btn sm ghost" id="semuabaca">Tandai semua dibaca</button> <button class="icon-btn" data-x aria-label="Tutup">✕</button></span></div>' + (window.Push ? Push.kotak() : '') + '<div id="nlist" class="loading">Memuat…</div>');
+    $('[data-pushon]', m)?.addEventListener('click', async e => { if (await Push.aktifkan(e.target)) m.remove(); });
     try {
       const r = await q(sb.from('notif').select('id,judul,isi,href,at,dibaca_at').order('at', { ascending: false }).limit(40));
       const L = $('#nlist', m); L.className = '';
@@ -119,7 +121,8 @@
       '<div class="me"><button class="btn sm ghost bell" id="bell" title="Notifikasi" aria-label="Notifikasi">🔔<i id="nbadge"></i></button><span>' + esc(state.profile?.nama || state.user?.email) + '<small>' + esc(ROLE[role()] || 'Belum punya peran') + '</small></span><button class="btn sm ghost" id="sandi" title="Ganti kata sandi">Sandi</button><button class="btn sm ghost" id="keluar">Keluar</button></div></header>' +
       '<main id="view"></main>';
     $('#bell').onclick = bukaNotif; hitungNotif();
-    $('#keluar').onclick = async () => { await sb.auth.signOut(); location.hash = ''; location.reload(); };
+    if (window.Push) Push.saatMasuk();
+    $('#keluar').onclick = async () => { if (window.Push) await Push.lepas(); await sb.auth.signOut(); location.hash = ''; location.reload(); };
     $('#sandi').onclick = () => {
       const m = modal('<div class="modal-head"><b>Ganti kata sandi</b><button class="icon-btn" data-x aria-label="Tutup">✕</button></div>' +
         '<form id="fsandi"><label class="lbl">Kata sandi baru (min. 8 karakter)<input type="password" name="a" minlength="8" required autocomplete="new-password"></label>' +
@@ -164,7 +167,7 @@
   }
 
   /* ---------- login, daftar akun, menunggu persetujuan ---------- */
-  const loginWrap = inner => '<div class="login"><div class="login-box">' + LOGO.replace('class="logo"', 'class="logo big"') +
+  const loginWrap = inner => '<div class="login"><div class="login-box">' + LOGO_BESAR + '<div class="pkg-nama">PADANG KARUNIA GROUP</div>' +
     '<h1>SHE PKG</h1><p class="muted">Sistem Mine Permit, SHE &amp; gudang — PT Hamparan Mulya, Site Muara Teweh</p>' + inner + '</div></div>';
   function viewLogin(pesan) {
     if (new URLSearchParams(location.search).has('lapor') && window.Hazard) return Hazard.viewPublik();
