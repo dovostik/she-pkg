@@ -235,3 +235,5 @@ label.cek { display: flex; gap: .5rem; align-items: flex-start; margin: .8rem 0;
 .pushinfo { margin: 0 0 .6rem; padding: .5rem .7rem; border-radius: 8px; background: #eef4fb; font-size: .88rem; display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; }
 .pushinfo.ok { background: #e3f4ea; color: #015a20; } .pushinfo.warn { background: #fff7e0; }
 .pub-head { display: flex; align-items: center; gap: .45rem; } .pub-logo { width: 30px; height: 30px; background: #fff; border-radius: 7px; padding: 3px; flex: none; }
+.pasang-btn { margin-top: .9rem; background: #fff; border: 2px solid var(--green); color: var(--green); font-weight: 700; }
+.pasang-langkah { padding-left: 1.2rem; line-height: 1.6; } .ikon-share { display: inline-block; border: 1px solid #aaa; border-radius: 4px; padding: 0 .3rem; }

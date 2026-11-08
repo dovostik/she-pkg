@@ -2,9 +2,9 @@
    - File aplikasi: ambil dari jaringan (maks 4 detik), bila gagal pakai salinan di HP.
    - Library CDN (versi tetap): pakai salinan di HP.
    - Data Supabase tidak disimpan di sini (diatur aplikasi sendiri). */
-const VERSI = 'she-pkg-v13';
+const VERSI = 'she-pkg-v14';
 const APP = ['./', 'index.html', 'manifest.webmanifest', 'css/app.css', 'css/card.css',
-  'js/config.js', 'js/card.js', 'js/foto.js', 'js/scan.js', 'js/hazard.js', 'js/ujian.js', 'js/push.js', 'js/app.js',
+  'js/config.js', 'js/card.js', 'js/foto.js', 'js/scan.js', 'js/hazard.js', 'js/ujian.js', 'js/pasang.js', 'js/push.js', 'js/app.js',
   'img/hm.png', 'img/pkg-mark.svg', 'img/k3.png', 'img/ttd.png', 'img/icon-192.png', 'img/favicon-32.png', 'img/badge.png', 'img/icon-512.png', 'img/apple-touch-icon.png', 'img/rambu/1.jpg', 'img/rambu/2.jpg', 'img/rambu/3.jpg', 'img/rambu/4.jpg', 'img/rambu/5.jpg'];
 const CDN = ['https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js',
   'https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js',

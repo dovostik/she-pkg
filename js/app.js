@@ -122,6 +122,7 @@
       '<main id="view"></main>';
     $('#bell').onclick = bukaNotif; hitungNotif();
     if (window.Push) Push.saatMasuk();
+    if (window.Pasang) Pasang.render();
     $('#keluar').onclick = async () => { if (window.Push) await Push.lepas(); await sb.auth.signOut(); location.hash = ''; location.reload(); };
     $('#sandi').onclick = () => {
       const m = modal('<div class="modal-head"><b>Ganti kata sandi</b><button class="icon-btn" data-x aria-label="Tutup">✕</button></div>' +
@@ -168,7 +169,7 @@
 
   /* ---------- login, daftar akun, menunggu persetujuan ---------- */
   const loginWrap = inner => '<div class="login"><div class="login-box">' + LOGO_BESAR + '<div class="pkg-nama">PADANG KARUNIA GROUP</div>' +
-    '<h1>SHE PKG</h1><p class="muted">Sistem Mine Permit, SHE &amp; gudang — PT Hamparan Mulya, Site Muara Teweh</p>' + inner + '</div></div>';
+    '<h1>SHE PKG</h1><p class="muted">Sistem Mine Permit, SHE &amp; gudang — PT Hamparan Mulya, Site Muara Teweh</p>' + inner + '<div id="pasang"></div></div></div>';
   function viewLogin(pesan) {
     if (new URLSearchParams(location.search).has('lapor') && window.Hazard) return Hazard.viewPublik();
     if (window.Hazard) Hazard.kirimAntrianPublik();
