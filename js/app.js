@@ -367,6 +367,11 @@
       '<div class="detail-grid"><section class="card-preview"><div class="scaler">' + MPCard.renderCard(c, { foto: url, ktt: state.setting.ktt_nama, persetujuan: state.setting.mp_judul_persetujuan, accident: acc }) + '</div>' +
       (FS[kr.foto_status] ? '<div class="note warn">' + FS[kr.foto_status] + '</div>' : '') +
       (c.status === 'nonaktif' ? '<div class="note err"><b>Mine Permit dinonaktifkan</b> ' + tgl(c.nonaktif_at) + ': ' + esc(c.nonaktif_alasan || '-') + '<br><small>Tidak muncul di daftar biasa, dan saat discan dinyatakan TIDAK BOLEH.</small></div>' : '') +
+      (() => { const st = c.status_asli || c.status; if (!['aktif', 'kadaluarsa'].includes(st)) return '';
+        const sisa = Math.round((new Date(c.berlaku_sampai + 'T00:00:00') - new Date(new Date().toDateString())) / 864e5);
+        if (st === 'aktif' && sisa > 30) return '';
+        return '<div class="note ' + (sisa < 0 ? 'err' : 'warn') + '"><b>' + (sisa < 0 ? 'Masa berlaku sudah habis' : sisa === 0 ? 'Masa berlaku habis HARI INI' : 'Masa berlaku habis ' + sisa + ' hari lagi') + '.</b> Perpanjangan wajib <b>ujian teori</b> (tanpa dokumen) — ajukan sebelum masa berlaku habis.' +
+          (!isShe() && canAjukan() ? ' <a class="btn sm primary" href="#/pengajuan/baru?karyawan=' + c.karyawan_id + '&jenis=perpanjangan&lama=' + c.id + '">Ajukan perpanjangan</a>' : '') + '</div>'; })() +
       (isShe() ? '<div class="actions"><button class="btn primary" id="cetak1">Cetak</button><button class="btn" id="foto">Atur foto</button>' +
         (c.status === 'nonaktif' ? '<button class="btn" id="aktifkan1">Aktifkan kembali</button>' : '<button class="btn danger" id="nonaktif1">Nonaktifkan</button>') +
         (['aktif', 'kadaluarsa'].includes(c.status_asli || c.status) ? '<a class="btn" href="#/pengajuan/baru?karyawan=' + c.karyawan_id + '&jenis=perpanjangan&lama=' + c.id + '">Perpanjang</a><a class="btn" href="#/pengajuan/baru?karyawan=' + c.karyawan_id + '&jenis=tambah_unit&lama=' + c.id + '">Tambah unit</a>' : '') +
@@ -471,7 +476,8 @@
     v.innerHTML = '<div class="page-head"><div><a href="#/pengajuan" class="back">‹ Pengajuan</a><h1>Pengajuan Mine Permit</h1></div></div>' +
       '<form id="fbaru" class="form">' +
       '<fieldset><legend>Jenis pengajuan</legend><div class="seg">' + Object.entries(JENIS_P).map(([k, t]) => '<label><input type="radio" name="jenis" value="' + k + '"' + (k === jenis ? ' checked' : '') + '><span>' + t + '</span></label>').join('') + '</div>' +
-      (lama ? '<p class="muted small">Mine Permit lama: <b>' + esc(lama.nomor) + '</b>' + (jenis === 'perpanjangan' ? ' — nomor & QR tetap sama setelah diperpanjang.' : '') + '</p>' : '') + '</fieldset>' +
+      (lama ? '<p class="muted small">Mine Permit lama: <b>' + esc(lama.nomor) + '</b>' + (jenis === 'perpanjangan' ? ' — nomor & QR tetap sama setelah diperpanjang.' : '') + '</p>' : '') +
+      '<div class="note ok perp-info"' + (jenis === 'perpanjangan' ? '' : ' hidden') + '><b>Perpanjangan cukup ujian teori.</b> Tidak perlu unggah dokumen. Ajukan <b>sebelum masa berlaku habis</b>; setelah SHE membuka ujian, peserta scan QR di HP-nya (tanpa akun) seperti pengajuan baru.</div></fieldset>' +
       '<fieldset><legend>Karyawan</legend><div id="krpick">' + (kr ? krChip(kr) : '') + '</div>' +
       (kr ? '' : '<input type="search" id="krcari" placeholder="Ketik nama atau NIK karyawan…" autocomplete="off"><div id="krhasil" class="suggest"></div>' +
         '<details id="krbaru"><summary>Karyawan belum terdaftar? Tambah baru</summary><div class="grid2">' +
@@ -495,6 +501,7 @@
       '<label class="lbl">Catatan<textarea name="catatan" rows="2"></textarea></label>' +
       '<div class="actions"><button class="btn primary" id="simpanbaru">Simpan pengajuan</button></div></form>';
     let pilihKr = kr;
+    $$('#fbaru input[name=jenis]').forEach(r => r.onchange = () => { $('#fbaru .perp-info').hidden = $('#fbaru').jenis.value !== 'perpanjangan'; });
     const cari = $('#krcari');
     if (cari) {
       let t; cari.oninput = () => { clearTimeout(t); t = setTimeout(async () => {
@@ -550,6 +557,7 @@
     const docBy = Object.fromEntries(docs.map(d => [d.syarat_kode, d]));
     const fotoU = await fotoUrl(k.foto_path);
     const final = ['disetujui', 'ditolak'].includes(p.status);
+    const perp = p.jenis === 'perpanjangan';
     const picBoleh = isPic() && ['draft', 'diajukan', 'verifikasi_dok'].includes(p.status);
     const bisaFoto = (isShe() && !final) || picBoleh;
     const idx = ALUR.indexOf(p.status);
@@ -568,14 +576,14 @@
           '<dt>Gol. darah</dt><dd>' + esc(k.golongan_darah || '-') + '</dd>' +
           (p.catatan ? '<dt>Catatan</dt><dd>' + esc(p.catatan) + '</dd>' : '') +
           (p.kimper_id ? '<dt>Mine Permit</dt><dd><a href="#/mp/' + p.kimper_id + '">Lihat Mine Permit ›</a></dd>' : '') + '</dl></div>' +
-        '<div class="box"><h3>Dokumen persyaratan</h3><ul class="docs">' + syarat.map(s => { const d = docBy[s.kode];
-          return '<li><div><b>' + esc(s.nama) + '</b>' + (s.wajib ? '' : ' <small class="muted">(bila perlu)</small>') + '<br><small class="doc-st ' + (d?.status || 'belum') + '">' + ({ diunggah: 'Diunggah — menunggu diperiksa', valid: 'Valid', tidak_valid: 'Tidak valid' + (d?.catatan ? ': ' + esc(d.catatan) : '') }[d?.status] || 'Belum diunggah') + '</small></div>' +
+        '<div class="box"><h3>Dokumen persyaratan</h3>' + (perp ? '<div class="note ok"><b>Perpanjangan: cukup ujian teori.</b> Dokumen di bawah tidak wajib — unggah hanya bila ada perubahan (mis. SIM baru).</div>' : '') + '<ul class="docs">' + syarat.map(s => { const d = docBy[s.kode];
+          return '<li><div><b>' + esc(s.nama) + '</b>' + (perp ? ' <small class="muted">(tidak wajib)</small>' : s.wajib ? '' : ' <small class="muted">(bila perlu)</small>') + '<br><small class="doc-st ' + (d?.status || 'belum') + '">' + ({ diunggah: 'Diunggah — menunggu diperiksa', valid: 'Valid', tidak_valid: 'Tidak valid' + (d?.catatan ? ': ' + esc(d.catatan) : '') }[d?.status] || 'Belum diunggah') + '</small></div>' +
             '<div class="doc-act">' + (d?.path ? '<button class="btn sm ghost" data-lihat="' + esc(d.path) + '">Lihat</button>' : '') +
             (picBoleh && d?.status !== 'valid' ? '<label class="btn sm">' + (d ? 'Ganti' : 'Unggah') + '<input type="file" accept="image/*,application/pdf" hidden data-up="' + s.kode + '"></label>' : '') +
             (isShe() && !final ? (s.kode === 'FOTO' && k.foto_path ? '<button class="btn sm" data-pakaifoto="' + s.kode + '">Pakai pas foto</button>' : '') + '<label class="btn sm">Unggah<input type="file" accept="image/*,application/pdf" hidden data-up="' + s.kode + '"></label>' +
               (d && d.status !== 'valid' ? '<button class="btn sm ok" data-valid="' + d.id + '">Valid</button>' : '') + (d && d.status !== 'tidak_valid' ? '<button class="btn sm danger" data-tdk="' + d.id + '">Tidak valid</button>' : '') : '') + '</div></li>'; }).join('') + '</ul></div>' +
       '</section><section>' +
-        '<div class="box"><h3>Unit & hasil</h3><p class="muted small">Lulus bila nilai ujian teori ≥ ' + (nl.teori ?? 70) + ' dan <b>surat pernyataan kompetensi</b> valid (pengganti uji praktik). Kode akses: F = full, R = restricted.</p><table class="tbl"><thead><tr><th>Unit</th><th>Akses</th><th>Nilai teori</th><th>Hasil</th></tr></thead><tbody>' +
+        '<div class="box"><h3>Unit & hasil</h3><p class="muted small">Lulus bila nilai ujian teori ≥ ' + (nl.teori ?? 70) + (perp ? ' (perpanjangan: cukup ujian teori).' : ' dan <b>surat pernyataan kompetensi</b> valid (pengganti uji praktik).') + ' Kode akses: F = full, R = restricted.</p><table class="tbl"><thead><tr><th>Unit</th><th>Akses</th><th>Nilai teori</th><th>Hasil</th></tr></thead><tbody>' +
           units.map(u => '<tr data-uid="' + u.id + '"><td>' + esc(juMap[u.jenis_unit]?.nama || u.jenis_unit) + '</td>' +
             (isShe() && !final ? '<td><select data-f="akses"><option' + (u.akses === 'F' ? ' selected' : '') + '>F</option><option' + (u.akses === 'R' ? ' selected' : '') + '>R</option></select></td>' : '<td>' + u.akses + '</td>') +
             '<td>' + (u.nilai_teori ?? '<span class="muted">dari ujian</span>') + '</td>' +
@@ -588,8 +596,8 @@
     // tombol alur
     const act = $('#pact'); const btns = [];
     if ((isShe() || isPic()) && p.status === 'draft') btns.push(['diajukan', isPic() ? 'Kirim ke SHE HM' : 'Ajukan', 'primary']);
-    if (isShe() && p.status === 'diajukan') btns.push(['verifikasi_dok', 'Mulai verifikasi dokumen', 'primary']);
-    if (isShe() && p.status === 'verifikasi_dok') btns.push(['uji', '✓ Setujui dokumen → buka ujian teori', 'primary']);
+    if (isShe() && p.status === 'diajukan') btns.push(['verifikasi_dok', perp ? 'Mulai periksa data perpanjangan' : 'Mulai verifikasi dokumen', 'primary']);
+    if (isShe() && p.status === 'verifikasi_dok') btns.push(['uji', perp ? '✓ Data sesuai → buka ujian teori' : '✓ Setujui dokumen → buka ujian teori', 'primary']);
     if (isShe() && p.status === 'uji' && units.some(u => u.lulus)) btns.push(['menunggu_approval', 'Kirim ke SPV untuk persetujuan', 'primary']);
     if (canApprove() && p.status === 'menunggu_approval') btns.push(['disetujui', p.jenis === 'perpanjangan' ? 'LULUS — setujui & perpanjang' : 'LULUS — terbitkan Mine Permit', 'primary'], ['tidaklulus', 'TIDAK LULUS', 'danger']);
     if (isShe() && !final) btns.push(['ditolak', 'Tolak', 'danger']);
