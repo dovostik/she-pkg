@@ -370,7 +370,10 @@
       (() => { const st = c.status_asli || c.status; if (!['aktif', 'kadaluarsa'].includes(st)) return '';
         const sisa = Math.round((new Date(c.berlaku_sampai + 'T00:00:00') - new Date(new Date().toDateString())) / 864e5);
         if (st === 'aktif' && sisa > 30) return '';
-        return '<div class="note ' + (sisa < 0 ? 'err' : 'warn') + '"><b>' + (sisa < 0 ? 'Masa berlaku sudah habis' : sisa === 0 ? 'Masa berlaku habis HARI INI' : 'Masa berlaku habis ' + sisa + ' hari lagi') + '.</b> Perpanjangan wajib <b>ujian teori</b> (tanpa dokumen) — ajukan sebelum masa berlaku habis.' +
+        const tg = +(state.setting.kimper_tenggang_perpanjangan_hari ?? 30), lewatTg = -sisa > tg;
+        return '<div class="note ' + (sisa < 0 ? 'err' : 'warn') + '"><b>' + (sisa < 0 ? 'Masa berlaku sudah habis ' + (-sisa) + ' hari' : sisa === 0 ? 'Masa berlaku habis HARI INI' : 'Masa berlaku habis ' + sisa + ' hari lagi') + '.</b> ' +
+          (lewatTg ? 'Lewat masa tenggang ' + tg + ' hari — perpanjangan wajib <b>syarat lengkap seperti baru</b> (ID kartu tetap, tercatat telat perpanjang).'
+            : 'Perpanjangan cukup <b>ujian teori</b> (tanpa dokumen)' + (sisa < 0 ? ' — sisa tenggang ' + (tg + sisa) + ' hari.' : ' — ajukan sebelum masa berlaku habis.')) +
           (!isShe() && canAjukan() ? ' <a class="btn sm primary" href="#/pengajuan/baru?karyawan=' + c.karyawan_id + '&jenis=perpanjangan&lama=' + c.id + '">Ajukan perpanjangan</a>' : '') + '</div>'; })() +
       (isShe() ? '<div class="actions"><button class="btn primary" id="cetak1">Cetak</button><button class="btn" id="foto">Atur foto</button>' +
         (c.status === 'nonaktif' ? '<button class="btn" id="aktifkan1">Aktifkan kembali</button>' : '<button class="btn danger" id="nonaktif1">Nonaktifkan</button>') +
@@ -379,6 +382,7 @@
       '<section class="info">' +
         '<div class="box"><h3>Data</h3><dl>' +
           '<dt>Berlaku sampai</dt><dd>' + tgl(c.berlaku_sampai) + (c.perpanjangan_ke ? ' <span class="muted">(diperpanjang ' + c.perpanjangan_ke + '×)</span>' : '') + '</dd>' +
+          (c.telat_perpanjang_ke ? '<dt>Catatan</dt><dd><span class="badge st-dicabut">Telat perpanjang ' + c.telat_perpanjang_ke + '×</span> <small class="muted">terakhir ' + tgl(c.telat_perpanjang_terakhir) + '</small></dd>' : '') +
           '<dt>SIM</dt><dd>' + esc(c.sim_jenis || '-') + ' · ' + esc(c.sim_nomor || '-') + ' · s/d ' + tgl(c.sim_berlaku) + '</dd>' +
           '<dt>Gol. darah</dt><dd>' + (isShe() ? '<select id="gd"><option value="">—</option>' + ['A', 'B', 'AB', 'O', 'A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].map(g => '<option' + (g === c.golongan_darah ? ' selected' : '') + '>' + g + '</option>').join('') + '</select>' : esc(c.golongan_darah || '-')) + '</dd>' +
           '<dt>Dicetak</dt><dd>' + (c.dicetak_at ? tgl(c.dicetak_at) + ' (' + c.cetak_ke + '×)' : 'Belum') + '</dd>' +
@@ -477,7 +481,7 @@
       '<form id="fbaru" class="form">' +
       '<fieldset><legend>Jenis pengajuan</legend><div class="seg">' + Object.entries(JENIS_P).map(([k, t]) => '<label><input type="radio" name="jenis" value="' + k + '"' + (k === jenis ? ' checked' : '') + '><span>' + t + '</span></label>').join('') + '</div>' +
       (lama ? '<p class="muted small">Mine Permit lama: <b>' + esc(lama.nomor) + '</b>' + (jenis === 'perpanjangan' ? ' — nomor & QR tetap sama setelah diperpanjang.' : '') + '</p>' : '') +
-      '<div class="note ok perp-info"' + (jenis === 'perpanjangan' ? '' : ' hidden') + '><b>Perpanjangan cukup ujian teori.</b> Tidak perlu unggah dokumen. Ajukan <b>sebelum masa berlaku habis</b>; setelah SHE membuka ujian, peserta scan QR di HP-nya (tanpa akun) seperti pengajuan baru.</div></fieldset>' +
+      '<div class="jenis-info"></div></fieldset>' +
       '<fieldset><legend>Karyawan</legend><div id="krpick">' + (kr ? krChip(kr) : '') + '</div>' +
       (kr ? '' : '<input type="search" id="krcari" placeholder="Ketik nama atau NIK karyawan…" autocomplete="off"><div id="krhasil" class="suggest"></div>' +
         '<details id="krbaru"><summary>Karyawan belum terdaftar? Tambah baru</summary><div class="grid2">' +
@@ -501,7 +505,15 @@
       '<label class="lbl">Catatan<textarea name="catatan" rows="2"></textarea></label>' +
       '<div class="actions"><button class="btn primary" id="simpanbaru">Simpan pengajuan</button></div></form>';
     let pilihKr = kr;
-    $$('#fbaru input[name=jenis]').forEach(r => r.onchange = () => { $('#fbaru .perp-info').hidden = $('#fbaru').jenis.value !== 'perpanjangan'; });
+    const infoJenis = () => {
+      const jn = $('#fbaru').jenis.value, tg = +(state.setting.kimper_tenggang_perpanjangan_hari ?? 30), box = $('#fbaru .jenis-info');
+      const lewat = lama ? Math.round((new Date(new Date().toDateString()) - new Date(lama.berlaku_sampai + 'T00:00:00')) / 864e5) : 0;
+      box.innerHTML = jn === 'perpanjangan' ? (lewat > tg
+          ? '<div class="note err"><b>Telat perpanjang</b> — kartu lama habis ' + lewat + ' hari lalu (lewat tenggang ' + tg + ' hari). Syarat <b>lengkap seperti pengajuan baru</b> (KTP, pas foto, surat kompetensi, dst.). Nomor & ID kartu tetap, tercatat sebagai telat perpanjang.</div>'
+          : '<div class="note ok"><b>Perpanjangan cukup ujian teori.</b> Tidak perlu unggah dokumen. Ajukan sebelum masa berlaku habis (tenggang ' + tg + ' hari setelah habis)' + (lewat > 0 ? ' — kartu sudah habis ' + lewat + ' hari, sisa tenggang ' + (tg - lewat) + ' hari' : '') + '. Peserta ujian scan QR di HP-nya (tanpa akun) seperti pengajuan baru.</div>')
+        : jn === 'tambah_unit' ? '<div class="note ok"><b>Tambah unit:</b> wajib <b>surat keterangan kompetensi</b> untuk unit yang ditambahkan, lalu ujian teori.</div>' : '';
+    };
+    $$('#fbaru input[name=jenis]').forEach(r => r.onchange = infoJenis); infoJenis();
     const cari = $('#krcari');
     if (cari) {
       let t; cari.oninput = () => { clearTimeout(t); t = setTimeout(async () => {
@@ -546,10 +558,11 @@
   const ALUR = ['draft', 'diajukan', 'verifikasi_dok', 'uji', 'menunggu_approval', 'disetujui'];
   async function viewPengajuan(v, id) {
     const p = await q(sb.from('kimper_pengajuan').select('*,karyawan:karyawan_id(id,nik,nama,jabatan,golongan_darah,foto_path,foto_asli_path,foto_status,foto_zoom,foto_x,foto_y,perusahaan:perusahaan_id(nama))').eq('id', id).single());
-    const [units, docs, kurang] = await Promise.all([
+    const [units, docs, kurang, aturan] = await Promise.all([
       q(sb.from('kimper_pengajuan_unit').select('id,jenis_unit,akses,nilai_teori,nilai_praktik,lulus,catatan').eq('pengajuan_id', id)),
       q(sb.from('kimper_dokumen').select('id,syarat_kode,path,status,catatan').eq('pengajuan_id', id)),
-      q(sb.rpc('kimper_kekurangan', { p_id: id }))
+      q(sb.rpc('kimper_kekurangan', { p_id: id })),
+      sb.rpc('kimper_aturan', { p_id: id }).then(r => r.data || null)
     ]);
     const k = p.karyawan, juMap = Object.fromEntries(state.jenisUnit.map(u => [u.kode, u]));
     const adaBerat = units.some(u => ['berat', 'khusus'].includes(juMap[u.jenis_unit]?.kelas));
@@ -558,12 +571,18 @@
     const fotoU = await fotoUrl(k.foto_path);
     const final = ['disetujui', 'ditolak'].includes(p.status);
     const perp = p.jenis === 'perpanjangan';
+    const wajibDok = new Set(aturan?.dokumen || state.syarat.filter(s => s.wajib).map(s => s.kode));
+    const telat = !!aturan?.telat, tg = aturan?.tenggang ?? 30;
+    const infoAturan = perp ? (telat
+        ? '<div class="note err"><b>Telat perpanjang</b> — Mine Permit lama habis ' + (aturan.hari_lewat ?? p.telat_hari ?? '?') + ' hari lalu (lewat masa tenggang ' + tg + ' hari). Syarat <b>lengkap seperti pengajuan baru</b>, termasuk surat kompetensi. Nomor & ID kartu tetap; tercatat sebagai telat perpanjang.</div>'
+        : '<div class="note ok"><b>Perpanjangan: cukup ujian teori.</b> Dokumen tidak wajib — unggah hanya bila ada perubahan (mis. SIM baru).' + (aturan?.hari_lewat > 0 ? ' Kartu sudah habis ' + aturan.hari_lewat + ' hari (masih dalam tenggang ' + tg + ' hari).' : '') + '</div>')
+      : p.jenis === 'tambah_unit' ? '<div class="note ok"><b>Tambah unit:</b> cukup <b>surat keterangan kompetensi</b> untuk unit yang ditambahkan, lalu ujian teori.</div>' : '';
     const picBoleh = isPic() && ['draft', 'diajukan', 'verifikasi_dok'].includes(p.status);
     const bisaFoto = (isShe() && !final) || picBoleh;
     const idx = ALUR.indexOf(p.status);
     const nl = state.setting.kimper_nilai_lulus || {};
     v.innerHTML = '<div class="page-head"><div><a href="#/pengajuan" class="back">‹ Pengajuan</a><h1>' + esc(k.nama) + '</h1><div class="muted">' + esc(p.nomor) + ' · ' + JENIS_P[p.jenis] + ' · ' + esc(k.perusahaan?.nama) + ' · NIK ' + esc(k.nik) + '</div></div>' +
-      '<span class="badge pst-' + p.status + '">' + PST[p.status] + '</span></div>' +
+      '<span class="badge pst-' + p.status + '">' + PST[p.status] + '</span>' + (telat ? ' <span class="badge st-dicabut">TELAT PERPANJANG</span>' : '') + '</div>' +
       (p.status === 'ditolak' ? '<div class="note err">Ditolak: ' + esc(p.alasan_tolak) + '</div>' : '') +
       '<ol class="stepper">' + ALUR.map((s, i) => '<li class="' + (i < idx || p.status === 'disetujui' ? 'done' : i === idx ? 'now' : '') + '">' + PST[s] + '</li>').join('') + '</ol>' +
       '<div class="detail-grid"><section>' +
@@ -576,14 +595,14 @@
           '<dt>Gol. darah</dt><dd>' + esc(k.golongan_darah || '-') + '</dd>' +
           (p.catatan ? '<dt>Catatan</dt><dd>' + esc(p.catatan) + '</dd>' : '') +
           (p.kimper_id ? '<dt>Mine Permit</dt><dd><a href="#/mp/' + p.kimper_id + '">Lihat Mine Permit ›</a></dd>' : '') + '</dl></div>' +
-        '<div class="box"><h3>Dokumen persyaratan</h3>' + (perp ? '<div class="note ok"><b>Perpanjangan: cukup ujian teori.</b> Dokumen di bawah tidak wajib — unggah hanya bila ada perubahan (mis. SIM baru).</div>' : '') + '<ul class="docs">' + syarat.map(s => { const d = docBy[s.kode];
-          return '<li><div><b>' + esc(s.nama) + '</b>' + (perp ? ' <small class="muted">(tidak wajib)</small>' : s.wajib ? '' : ' <small class="muted">(bila perlu)</small>') + '<br><small class="doc-st ' + (d?.status || 'belum') + '">' + ({ diunggah: 'Diunggah — menunggu diperiksa', valid: 'Valid', tidak_valid: 'Tidak valid' + (d?.catatan ? ': ' + esc(d.catatan) : '') }[d?.status] || 'Belum diunggah') + '</small></div>' +
+        '<div class="box"><h3>Dokumen persyaratan</h3>' + infoAturan + '<ul class="docs">' + syarat.map(s => { const d = docBy[s.kode];
+          return '<li><div><b>' + esc(s.nama) + '</b>' + (!s.wajib ? ' <small class="muted">(bila perlu)</small>' : wajibDok.has(s.kode) ? '' : ' <small class="muted">(tidak wajib)</small>') + '<br><small class="doc-st ' + (d?.status || 'belum') + '">' + ({ diunggah: 'Diunggah — menunggu diperiksa', valid: 'Valid', tidak_valid: 'Tidak valid' + (d?.catatan ? ': ' + esc(d.catatan) : '') }[d?.status] || 'Belum diunggah') + '</small></div>' +
             '<div class="doc-act">' + (d?.path ? '<button class="btn sm ghost" data-lihat="' + esc(d.path) + '">Lihat</button>' : '') +
             (picBoleh && d?.status !== 'valid' ? '<label class="btn sm">' + (d ? 'Ganti' : 'Unggah') + '<input type="file" accept="image/*,application/pdf" hidden data-up="' + s.kode + '"></label>' : '') +
             (isShe() && !final ? (s.kode === 'FOTO' && k.foto_path ? '<button class="btn sm" data-pakaifoto="' + s.kode + '">Pakai pas foto</button>' : '') + '<label class="btn sm">Unggah<input type="file" accept="image/*,application/pdf" hidden data-up="' + s.kode + '"></label>' +
               (d && d.status !== 'valid' ? '<button class="btn sm ok" data-valid="' + d.id + '">Valid</button>' : '') + (d && d.status !== 'tidak_valid' ? '<button class="btn sm danger" data-tdk="' + d.id + '">Tidak valid</button>' : '') : '') + '</div></li>'; }).join('') + '</ul></div>' +
       '</section><section>' +
-        '<div class="box"><h3>Unit & hasil</h3><p class="muted small">Lulus bila nilai ujian teori ≥ ' + (nl.teori ?? 70) + (perp ? ' (perpanjangan: cukup ujian teori).' : ' dan <b>surat pernyataan kompetensi</b> valid (pengganti uji praktik).') + ' Kode akses: F = full, R = restricted.</p><table class="tbl"><thead><tr><th>Unit</th><th>Akses</th><th>Nilai teori</th><th>Hasil</th></tr></thead><tbody>' +
+        '<div class="box"><h3>Unit & hasil</h3><p class="muted small">Lulus bila nilai ujian teori ≥ ' + (nl.teori ?? 70) + (aturan && !aturan.kompetensi ? ' (perpanjangan: cukup ujian teori).' : ' dan <b>surat pernyataan kompetensi</b> valid (pengganti uji praktik).') + ' Kode akses: F = full, R = restricted.</p><table class="tbl"><thead><tr><th>Unit</th><th>Akses</th><th>Nilai teori</th><th>Hasil</th></tr></thead><tbody>' +
           units.map(u => '<tr data-uid="' + u.id + '"><td>' + esc(juMap[u.jenis_unit]?.nama || u.jenis_unit) + '</td>' +
             (isShe() && !final ? '<td><select data-f="akses"><option' + (u.akses === 'F' ? ' selected' : '') + '>F</option><option' + (u.akses === 'R' ? ' selected' : '') + '>R</option></select></td>' : '<td>' + u.akses + '</td>') +
             '<td>' + (u.nilai_teori ?? '<span class="muted">dari ujian</span>') + '</td>' +
@@ -596,8 +615,8 @@
     // tombol alur
     const act = $('#pact'); const btns = [];
     if ((isShe() || isPic()) && p.status === 'draft') btns.push(['diajukan', isPic() ? 'Kirim ke SHE HM' : 'Ajukan', 'primary']);
-    if (isShe() && p.status === 'diajukan') btns.push(['verifikasi_dok', perp ? 'Mulai periksa data perpanjangan' : 'Mulai verifikasi dokumen', 'primary']);
-    if (isShe() && p.status === 'verifikasi_dok') btns.push(['uji', perp ? '✓ Data sesuai → buka ujian teori' : '✓ Setujui dokumen → buka ujian teori', 'primary']);
+    if (isShe() && p.status === 'diajukan') btns.push(['verifikasi_dok', perp && !telat ? 'Mulai periksa data perpanjangan' : 'Mulai verifikasi dokumen', 'primary']);
+    if (isShe() && p.status === 'verifikasi_dok') btns.push(['uji', perp && !telat ? '✓ Data sesuai → buka ujian teori' : '✓ Setujui dokumen → buka ujian teori', 'primary']);
     if (isShe() && p.status === 'uji' && units.some(u => u.lulus)) btns.push(['menunggu_approval', 'Kirim ke SPV untuk persetujuan', 'primary']);
     if (canApprove() && p.status === 'menunggu_approval') btns.push(['disetujui', p.jenis === 'perpanjangan' ? 'LULUS — setujui & perpanjang' : 'LULUS — terbitkan Mine Permit', 'primary'], ['tidaklulus', 'TIDAK LULUS', 'danger']);
     if (isShe() && !final) btns.push(['ditolak', 'Tolak', 'danger']);
